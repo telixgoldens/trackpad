@@ -28,67 +28,93 @@ const Dashboard = () => {
   const [bungeeTokens, setBungeeTokens] = useState([]);
   const [activity, setActivity] = useState([]);
   const [isActivityLoading, setIsActivityLoading] = useState(false);
-
-  // UI State
   const [selectedAsset, setSelectedAsset] = useState(null);
   const [walletAddress, setWalletAddress] = useState(null);
   const [walletConnected, setWalletConnected] = useState(false);
   const [modalContent, setModalContent] = useState(null);
   const [dailyRecap, setDailyRecap] = useState("Loading AI Market Recap...");
   const [aiAnalysis, setAiAnalysis] = useState(DEFAULT_AI_RESPONSE);
-
-  // Swap Form State
   const [swapAmount, setSwapAmount] = useState("");
-  const [swapTokenIn, setSwapTokenIn] = useState("");
-  const [swapTokenOut, setSwapTokenOut] = useState("");
+  
+  useEffect(() => {
+    if (!selectedAsset && portfolio.length > 0) setSelectedAsset(portfolio[0]);
+  }, [portfolio]);
 
- useEffect(() => { if (!selectedAsset && portfolio.length > 0) setSelectedAsset(portfolio[0]); }, [portfolio]);
+  // Load Bungee Tokens
+  useEffect(() => {
+    Web3Service.getBungeeTokens().then(setBungeeTokens);
+  }, []);
 
-    // Load Bungee Tokens
-    useEffect(() => {
-        Web3Service.getBungeeTokens().then(setBungeeTokens);
-    }, []);
+  // Fetch Activity Logic
+  useEffect(() => {
+    const fetchAct = async () => {
+      if (connected && address) {
+        setIsActivityLoading(true);
+        const realAct = await Web3Service.getWalletActivity(address);
+        setActivity(realAct);
+        setIsActivityLoading(false);
+      } else {
+        // High-fidelity Mock data for disconnected state
+        setActivity([
+          {
+            hash: "0x12...34",
+            timestamp: Date.now() - 3600000,
+            method: "Swap",
+            value: "1.25",
+            chain: "Base",
+            isMock: true,
+          },
+          {
+            hash: "0x56...78",
+            timestamp: Date.now() - 86400000,
+            method: "Transfer",
+            value: "500.00",
+            chain: "Mantle",
+            isMock: true,
+          },
+          {
+            hash: "0x90...ab",
+            timestamp: Date.now() - 172800000,
+            method: "Bridge",
+            value: "0.05",
+            chain: "Ethereum",
+            isMock: true,
+          },
+        ]);
+      }
+    };
+    if (view === "activity") fetchAct();
+  }, [view, walletConnected, walletAddress]);
 
-    // Fetch Activity Logic
-    useEffect(() => {
-        const fetchAct = async () => {
-            if (connected && address) {
-                setIsActivityLoading(true);
-                const realAct = await Web3Service.getWalletActivity(address);
-                setActivity(realAct);
-                setIsActivityLoading(false);
-            } else {
-                // High-fidelity Mock data for disconnected state
-                setActivity([
-                    { hash: "0x12...34", timestamp: Date.now() - 3600000, method: "Swap", value: "1.25", chain: "Base", isMock: true },
-                    { hash: "0x56...78", timestamp: Date.now() - 86400000, method: "Transfer", value: "500.00", chain: "Mantle", isMock: true },
-                    { hash: "0x90...ab", timestamp: Date.now() - 172800000, method: "Bridge", value: "0.05", chain: "Ethereum", isMock: true }
-                ]);
-            }
-        };
-        if (view === 'activity') fetchAct();
-    }, [view, connected, address]);
-
-    // Price Polling
-    useEffect(() => {
-        const update = async () => {
-            const all = [...portfolio, ...watchlist];
-            const live = await fetchLivePrices(all);
-            if (Object.keys(live).length > 0) {
-                setPortfolio(prev => prev.map(p => {
-                    const k = p.type === 'crypto' ? p.apiId : p.symbol;
-                    return live[k] ? { ...p, price: live[k].price, change: live[k].change } : p;
-                }));
-                setWatchlist(prev => prev.map(w => {
-                    const k = w.type === 'crypto' ? w.apiId : w.symbol;
-                    const d = live[k] ? { ...w, price: live[k].price } : w;
-                    if (d.target && d.price >= parseFloat(d.target)) setModal(`🎯 TARGET REACHED: ${d.symbol} is at $${d.price}`);
-                    return d;
-                }));
-            }
-        };
-        update(); const t = setInterval(update, 30000); return () => clearInterval(t);
-    }, [portfolio.length, watchlist.length]);
+  // Price Polling
+  useEffect(() => {
+    const update = async () => {
+      const all = [...portfolio, ...watchlist];
+      const live = await fetchLivePrices(all);
+      if (Object.keys(live).length > 0) {
+        setPortfolio((prev) =>
+          prev.map((p) => {
+            const k = p.type === "crypto" ? p.apiId : p.symbol;
+            return live[k]
+              ? { ...p, price: live[k].price, change: live[k].change }
+              : p;
+          })
+        );
+        setWatchlist((prev) =>
+          prev.map((w) => {
+            const k = w.type === "crypto" ? w.apiId : w.symbol;
+            const d = live[k] ? { ...w, price: live[k].price } : w;
+            if (d.target && d.price >= parseFloat(d.target))
+              setModal(`🎯 TARGET REACHED: ${d.symbol} is at $${d.price}`);
+            return d;
+          })
+        );
+      }
+    };
+    update();
+    const t = setInterval(update, 30000);
+    return () => clearInterval(t);
+  }, [portfolio.length, watchlist.length]);
 
   const handleConnectWallet = async () => {
     try {
@@ -114,14 +140,14 @@ const Dashboard = () => {
   const handleSwap = async () => {
     if (!walletConnected)
       return setModalContent(<p className="p-4">Connect wallet first.</p>);
+    if (!swapAmount || parseFloat(swapAmount) <= 0)
+      return setModalContent("Enter a valid amount.");
     setModalContent(<p className="p-4">Initiating Swap...</p>);
     try {
       const receipt = await Web3Service.executeSwap(
         walletAddress,
-        swapTokenIn,
-        swapTokenOut,
         swapAmount,
-        "base"
+        "mantle"
       );
       setModalContent(
         <div className="p-4">
@@ -134,10 +160,6 @@ const Dashboard = () => {
       setModalContent(<p className="p-4">Swap Failed: {e.message}</p>);
     }
   };
-
-  const handleAddHolding = (holding) => setPortfolio([...portfolio, holding]);
-  const handleDeleteHolding = (id) =>
-    setPortfolio(portfolio.filter((h) => h.id !== id));
 
   const handleGenerateCIOReport = async () => {
     setModalContent(
@@ -216,7 +238,7 @@ const Dashboard = () => {
       AIService.fetchDailyRecap().then(setDailyRecap);
   }, [view]);
 
-  const portfolioMetrics = useMemo(() => {
+  const metrics = useMemo(() => {
     const totalValue = portfolio.reduce(
       (sum, item) => sum + item.quantity * item.price,
       0
@@ -229,9 +251,10 @@ const Dashboard = () => {
     const cryptoValue = portfolio
       .filter((i) => i.type === "crypto")
       .reduce((sum, item) => sum + item.quantity * item.price, 0);
-    const stockValue = portfolio
-      .filter((i) => i.type === "stock")
-      .reduce((sum, item) => sum + item.quantity * item.price, 0);
+    const stockValue = portfolio.reduce(
+      (sum, item) => sum + item.quantity * item.price,
+      0
+    );
     return {
       totalValue: totalValue.toFixed(2),
       totalPnl: totalPnl.toFixed(2),
@@ -240,246 +263,103 @@ const Dashboard = () => {
     };
   }, [portfolio]);
 
-  const chartData = useMemo(
-    () =>
-      generateMockHistoricalData(
-        selectedAsset?.symbol || "UNK",
-        selectedAsset?.price
-      ),
-    [selectedAsset]
-  );
-
   const renderDashboard = () => (
     <div className="space-y-6">
-      <GasFeeWidget />
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <MetricCard
-            title="Total Portfolio Value"
-            value={`$${parseFloat(
-              portfolioMetrics.totalValue
-            ).toLocaleString()}`}
-            trend={2.4}
-            isPositive={true}
+            title="Net Worth"
+            value={`$${metrics.total.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}`}
+            trend={metrics.pnlPercent}
+            isPositive={metrics.pnl >= 0}
           />
           <MetricCard
-            title="Total P&L"
-            value={`$${parseFloat(portfolioMetrics.totalPnl).toLocaleString()}`}
-            trend={5.8}
-            isPositive={parseFloat(portfolioMetrics.totalPnl) >= 0}
+            title="Unrealized P&L"
+            value={`$${metrics.pnl.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}`}
+            isPositive={metrics.pnl >= 0}
           />
-          <MetricCard
-            title="Total Holdings"
-            value={portfolio.length}
-            trend={0}
-            isPositive={true}
-          />
+          <MetricCard title="Tracked Assets" value={portfolio.length} />
         </div>
-        <VisualizationMock metrics={portfolioMetrics} />
+        <VisualizationMock metrics={metrics} />
       </div>
 
       <div
-        className={`${theme.bgSecondary} p-6 rounded-xl ${theme.shadow} border ${theme.border}`}
+        className={`${theme.bgSecondary} p-6 rounded-3xl border ${theme.border}`}
       >
-        <h2
-          className={`text-2xl font-bold mb-4 ${theme.textPrimary} border-b pb-2 ${theme.border}`}
-        >
-          Wallet Status / Passive Tracking
+        <h2 className="text-sm font-black uppercase text-gray-500 tracking-widest mb-6">
+          Holdings Breakdown
         </h2>
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-grow w-full md:w-auto">
-            <label
-              className={`block text-sm font-medium mb-1 ${theme.textSecondary}`}
-            >
-              Enter Wallet Address (DeBank Style)
-            </label>
-            <input
-              type="text"
-              placeholder="0x..."
-              value={walletAddress || ""}
-              onChange={(e) => setWalletAddress(e.target.value)}
-              className={`w-full p-3 border ${theme.border} rounded-lg ${theme.bgPrimary} ${theme.textPrimary}`}
-              disabled={walletConnected}
-            />
-            <p className={`text-xs mt-1 ${theme.textSecondary}`}>
-              Status:{" "}
-              {walletConnected
-                ? "Active Connection"
-                : walletAddress
-                ? "Passive Tracking"
-                : "Disconnected"}
-            </p>
-          </div>
-          <button
-            onClick={handleConnectWallet}
-            className={`w-full md:w-auto px-6 py-3 rounded-lg font-semibold shadow-md ${
-              walletConnected
-                ? "bg-emerald-500 text-white"
-                : `${theme.accentBg} text-white`
-            }`}
-          >
-            {walletConnected ? "Connected" : "Connect Wallet"}
-          </button>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-[11px] font-bold">
+            <thead className="text-gray-500 border-b border-white/5 uppercase">
+              <tr>
+                <th className="pb-3 px-2">Ticker</th>
+                <th className="pb-3 px-2 text-right">Qty</th>
+                <th className="pb-3 px-2 text-right">Price</th>
+                <th className="pb-3 px-2 text-right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {portfolio.map((h) => (
+                <tr
+                  key={h.id}
+                  onClick={() => setSelectedAsset(h)}
+                  className="hover:bg-white/5 cursor-pointer"
+                >
+                  <td className="py-4 px-2">{h.symbol}</td>
+                  <td className="py-4 px-2 text-right text-gray-400">
+                    {h.quantity}
+                  </td>
+                  <td className="py-4 px-2 text-right font-black text-white">
+                    ${h.price?.toLocaleString() || "---"}
+                  </td>
+                  <td className="py-4 px-2 text-right text-blue-400 font-black">
+                    ${(h.quantity * (h.price || 0)).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      <div
-        className={`${theme.bgSecondary} p-6 rounded-xl ${theme.shadow} border ${theme.border}`}
-      >
-        <div className="flex items-center justify-between mb-4 border-b pb-2">
-          <h2 className={`text-2xl font-bold ${theme.textPrimary}`}>
-            Portfolio Holdings
-          </h2>
-          <button
-            onClick={handleGenerateCIOReport}
-            className="px-3 py-1 text-xs font-bold text-white bg-purple-600 rounded shadow hover:bg-purple-700"
-          >
-            ✨ CIO Report
-          </button>
+        <div className="mt-8 border-t border-dashed border-gray-800 pt-8">
+          <AddHoldingForm onAdd={(h) => setPortfolio([...portfolio, h])} />
         </div>
-        <HoldingsTable
-          holdings={portfolio}
-          onSelect={setSelectedAsset}
-          onDelete={handleDeleteHolding}
-        />
-        <AddHoldingForm onAdd={handleAddHolding} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div
-          className={`${theme.bgSecondary} p-6 rounded-xl ${theme.shadow} space-y-6 border ${theme.border}`}
+          className={`${theme.bgSecondary} p-8 rounded-3xl border ${theme.border}`}
         >
-          <h2
-            className={`text-2xl font-bold ${theme.textPrimary} mb-4 border-b pb-2 ${theme.border}`}
-          >
-            {selectedAsset ? `${selectedAsset.name} Analysis` : "Select Asset"}
+          <h2 className="text-xl font-black text-white mb-2">
+            {selectedAsset?.name} Chart
           </h2>
-          <div
-            className={`w-full h-48 rounded-lg ${theme.bgPrimary} border ${theme.border}`}
-          >
-            <InteractiveChart data={chartData} />
-          </div>
-          <div className={`pt-4 border-t ${theme.border}`}>
-            <h3 className={`text-xl font-semibold mb-3 ${theme.textPrimary}`}>
-              Token Swap
-            </h3>
-            <div className="grid gap-2 mb-3">
-              <input
-                type="text"
-                placeholder="Token In"
-                value={swapTokenIn}
-                onChange={(e) => setSwapTokenIn(e.target.value)}
-                className={`w-full p-2 border rounded ${theme.bgPrimary} ${theme.textPrimary}`}
-              />
-              <input
-                type="text"
-                placeholder="Token Out"
-                value={swapTokenOut}
-                onChange={(e) => setSwapTokenOut(e.target.value)}
-                className={`w-full p-2 border rounded ${theme.bgPrimary} ${theme.textPrimary}`}
-              />
-              <input
-                type="number"
-                placeholder="Amount"
-                value={swapAmount}
-                onChange={(e) => setSwapAmount(e.target.value)}
-                className={`w-full p-2 border rounded ${theme.bgPrimary} ${theme.textPrimary}`}
-              />
-            </div>
-            <button
-              onClick={handleSwap}
-              className={`w-full py-3 font-bold text-white rounded-lg shadow-xl ${
-                walletConnected ? "bg-red-600 hover:bg-red-700" : "bg-gray-500"
-              }`}
-            >
-              Execute Swap (0.1% Fee)
-            </button>
-          </div>
+          <InteractiveChart symbol={selectedAsset?.symbol} />
         </div>
-
         <div
-          className={`${theme.bgSecondary} p-6 rounded-xl ${theme.shadow} border ${theme.border}`}
+          className={`${theme.bgSecondary} p-8 rounded-3xl border ${theme.border} flex flex-col`}
         >
-          <div
-            className={`flex justify-between items-center mb-4 border-b pb-2 ${theme.border}`}
-          >
-            <h2 className={`text-2xl font-bold ${theme.textPrimary}`}>
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-xl font-black text-white italic underline underline-offset-4 decoration-blue-500">
               AI Intelligence
             </h2>
             <button
               onClick={() =>
-                AIService.fetchAssetAnalysis(selectedAsset?.name).then((res) =>
-                  setAiAnalysis(res)
+                AIService.fetchAssetAnalysis(selectedAsset?.name).then(
+                  setAiAnalysis
                 )
               }
-              disabled={!selectedAsset}
-              className={`px-4 py-2 font-semibold text-white rounded-lg shadow-md ${theme.accentBg}`}
+              className="text-[10px] font-black bg-white text-black px-6 py-2 rounded-full uppercase hover:bg-yellow-500 transition"
             >
-              Analyze Asset
+              Update Analysis
             </button>
           </div>
-          <div className="space-y-6">
-            <AIAnalysisSection
-              title="Trading Venue"
-              content={aiAnalysis.tradingVenue}
-              iconColor={theme.accentText}
-              icon={
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
-                  ></path>
-                </svg>
-              }
-            />
-            <AIAnalysisSection
-              title="Market News"
-              content={aiAnalysis.marketNews}
-              iconColor="text-green-500"
-              icon={
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M4 22h16c.89 0 1.34-.89.71-1.54L12 2.5 3.29 20.46c-.63.65-.18 1.54.71 1.54z"
-                  ></path>
-                </svg>
-              }
-            />
-            <AIAnalysisSection
-              title="Risk Assessment"
-              content={aiAnalysis.riskAssessment}
-              iconColor="text-red-500"
-              icon={
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"
-                  ></path>
-                </svg>
-              }
-            />
-          </div>
+          <p className="text-xs leading-relaxed text-gray-400 font-medium whitespace-pre-wrap">
+            {aiAnalysis}
+          </p>
         </div>
       </div>
     </div>
@@ -541,110 +421,135 @@ const Dashboard = () => {
   );
 
   const renderSwap = () => (
-    <div className="max-w-2xl mx-auto mt-10">
+    <div className="max-w-xl mx-auto space-y-6 pt-10">
+      <GasFeeWidget />
       <div
-        className={`${theme.bgSecondary} p-8 rounded-2xl shadow-xl border ${theme.border}`}
+        className={`${theme.bgSecondary} p-10 rounded-[50px] border ${theme.border} shadow-2xl`}
       >
-        <h2 className={`text-3xl font-extrabold mb-6 ${theme.textPrimary}`}>
-          Swap & Bridge
+        <h2 className="text-4xl font-black italic text-white mb-10 tracking-tighter">
+          SWAP & BRIDGE
         </h2>
-        <GasFeeWidget />
-        <div className="space-y-4 mt-6">
-          <div>
-            <label
-              className={`block text-sm font-bold mb-2 ${theme.textSecondary}`}
+        {!walletConnected ? (
+          <div className="text-center py-12">
+            <p className="text-gray-500 mb-8 font-black uppercase text-xs tracking-widest">
+              Connect Wallet to Unlock Liquidity
+            </p>
+            <button
+              onClick={handleConnectWallet}
+              className="px-14 py-6 bg-white text-black font-black rounded-3xl hover:bg-yellow-500 transition shadow-[0_20px_50px_rgba(255,255,255,0.1)] uppercase"
             >
-              From (Address)
-            </label>
-            <input
-              type="text"
-              className={`w-full p-4 rounded-lg border ${theme.border} ${theme.bgPrimary} ${theme.textPrimary}`}
-              placeholder="0x..."
-              value={swapTokenIn}
-              onChange={(e) => setSwapTokenIn(e.target.value)}
-            />
+              Initialize Access
+            </button>
           </div>
-          <div className="flex justify-center">
-            <svg
-              className={`w-8 h-8 ${theme.textSecondary}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-black/40 p-6 rounded-[30px] border border-white/5">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">
+                From Asset
+              </label>
+              <div className="flex items-center">
+                <select className="bg-transparent text-xl font-black text-white focus:outline-none w-full">
+                  <optgroup label="Real-Time Wallet">
+                    <option>MNT (742.50)</option>
+                    <option>USDC (2,400.00)</option>
+                  </optgroup>
+                  <optgroup label="Bungee Supported Networks">
+                    {bungeeTokens.slice(0, 30).map((t) => (
+                      <option key={t.address}>{t.symbol}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                <input
+                  type="number"
+                  placeholder="0.0"
+                  className="bg-transparent text-right text-3xl font-black text-white w-full focus:outline-none"
+                  value={swapAmount}
+                  onChange={(e) => setSwapAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-center -my-5 relative z-10">
+              <div className="bg-yellow-500 p-4 rounded-full text-black shadow-xl">
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="3"
+                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                  />
+                </svg>
+              </div>
+            </div>
+            <div className="bg-black/40 p-6 rounded-[30px] border border-white/5">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">
+                To Asset
+              </label>
+              <div className="flex items-center">
+                <select className="bg-transparent text-xl font-black text-white focus:outline-none w-full">
+                  {bungeeTokens.slice(0, 50).map((t) => (
+                    <option key={t.address}>
+                      {t.symbol} ({t.name})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-right text-3xl font-black text-gray-700 w-full">
+                  0.00
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handleSwap}
+              className="w-full py-7 bg-blue-600 text-white font-black rounded-3xl text-xl hover:scale-[1.02] transition shadow-lg shadow-blue-600/30 uppercase italic tracking-tighter"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M19 14l-7 7m0 0l-7-7m7 7V3"
-              />
-            </svg>
+              Execute Order
+            </button>
+            <p className="text-center text-[10px] font-black text-gray-600 uppercase tracking-widest mt-4">
+              Routed via Bungee • 0.1% Trackpad Fee
+            </p>
           </div>
-          <div>
-            <label
-              className={`block text-sm font-bold mb-2 ${theme.textSecondary}`}
-            >
-              To (Address)
-            </label>
-            <input
-              type="text"
-              className={`w-full p-4 rounded-lg border ${theme.border} ${theme.bgPrimary} ${theme.textPrimary}`}
-              placeholder="0x..."
-              value={swapTokenOut}
-              onChange={(e) => setSwapTokenOut(e.target.value)}
-            />
-          </div>
-          <div>
-            <label
-              className={`block text-sm font-bold mb-2 ${theme.textSecondary}`}
-            >
-              Amount
-            </label>
-            <input
-              type="number"
-              className={`w-full p-4 rounded-lg border ${theme.border} ${theme.bgPrimary} ${theme.textPrimary}`}
-              placeholder="0.0"
-              value={swapAmount}
-              onChange={(e) => setSwapAmount(e.target.value)}
-            />
-          </div>
-          <button
-            onClick={handleSwap}
-            className={`w-full py-4 text-lg font-bold text-white rounded-lg shadow-lg ${
-              walletConnected ? "bg-blue-600 hover:bg-blue-700" : "bg-gray-500"
-            }`}
-          >
-            {walletConnected ? "Review Swap" : "Connect Wallet to Swap"}
-          </button>
-          <p className={`text-xs text-center ${theme.textSecondary} mt-2`}>
-            Powered by Trackpad Router • 0.1% Fee Applied
-          </p>
-        </div>
+        )}
       </div>
     </div>
   );
 
   const renderActivity = () => (
-    <div className="space-y-6">
-      <h2 className={`text-2xl font-bold ${theme.textPrimary}`}>
-        Wallet Activity
-      </h2>
+    <div className="max-w-3xl mx-auto space-y-6 pt-10">
       <div
-        className={`${theme.bgSecondary} p-6 rounded-xl border ${theme.border}`}
+        className={`${theme.bgSecondary} p-10 rounded-[50px] border ${theme.border}`}
       >
-        {walletConnected ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
+        <div className="flex justify-between items-center mb-10">
+          <h2 className="text-4xl font-black text-white italic tracking-tighter uppercase underline decoration-blue-500 decoration-8 underline-offset-8">
+            On-Chain Ledger
+          </h2>
+          {walletConnected && (
+            <span className="text-[9px] font-black bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-full uppercase tracking-widest border border-emerald-500/20 animate-pulse">
+              Syncing Blocks
+            </span>
+          )}
+        </div>
+        {isActivityLoading ? (
+          <div className="py-24 text-center text-gray-600 font-black uppercase text-xs tracking-widest animate-pulse">
+            Decrypting Wallet Streams...
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {activity.map((tx, idx) => (
               <div
-                key={i}
-                className={`flex justify-between items-center p-4 rounded-lg ${theme.bgPrimary}`}
+                key={tx.hash || idx}
+                className="p-6 rounded-[32px] bg-black/50 border border-white/5 flex items-center justify-between hover:bg-black/70 transition group cursor-default"
               >
-                <div className="flex items-center">
+                <div className="flex items-center space-x-6">
                   <div
-                    className={`p-2 rounded-full mr-4 ${
-                      i === 1
-                        ? "bg-green-100 text-green-600"
-                        : "bg-blue-100 text-blue-600"
-                    }`}
+                    className={`p-4 rounded-2xl ${
+                      tx.isError
+                        ? "bg-red-500/10 text-red-500"
+                        : "bg-blue-500/10 text-blue-400"
+                    } border border-white/5`}
                   >
                     <svg
                       className="w-6 h-6"
@@ -655,36 +560,50 @@ const Dashboard = () => {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth="2"
+                        strokeWidth="2.5"
                         d={
-                          i === 1
-                            ? "M5 10l7-7m0 0l7 7m-7-7v18"
-                            : "M19 14l-7 7m0 0l-7-7m7 7V3"
+                          tx.method === "Swap"
+                            ? "M8 7h12m0 0l-4-4m4 4l-4 4"
+                            : "M7 16V4m0 0L3 8m4-4l4 4"
                         }
                       />
                     </svg>
                   </div>
                   <div>
-                    <p className={`font-bold ${theme.textPrimary}`}>
-                      {i === 1 ? "Sent ETH" : "Swap USDT -> BTC"}
+                    <p className="font-black text-white text-lg tracking-tighter uppercase italic">
+                      {tx.method}
                     </p>
-                    <p className={`text-xs ${theme.textSecondary}`}>
-                      2 mins ago • Confirmed
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">
+                      {tx.chain} •{" "}
+                      {new Date(tx.timestamp).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-mono ${theme.textPrimary}`}>
-                    {i === 1 ? "-0.5 ETH" : "+0.02 BTC"}
+                  <p
+                    className={`font-black text-xl tracking-tighter ${
+                      tx.isError ? "text-red-500" : "text-white"
+                    }`}
+                  >
+                    {tx.value}{" "}
+                    <span className="text-[10px] text-gray-600 font-black">
+                      MNT
+                    </span>
                   </p>
-                  <p className="text-xs text-gray-400">Fee: $1.20</p>
+                  <a
+                    href={`https://mantlescan.xyz/tx/${tx.hash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[9px] font-black text-blue-500 uppercase tracking-widest group-hover:underline opacity-0 group-hover:opacity-100 transition-all"
+                  >
+                    View Record &rarr;
+                  </a>
                 </div>
               </div>
             ))}
-          </div>
-        ) : (
-          <div className={`text-center py-10 ${theme.textSecondary}`}>
-            Connect wallet to view on-chain history.
           </div>
         )}
       </div>

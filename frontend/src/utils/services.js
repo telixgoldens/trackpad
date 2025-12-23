@@ -69,23 +69,24 @@ export const Web3Service = {
         }
     },
 
-  executeSwap: async (address, tokenIn, tokenOut, amountIn, chainKey) => {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    const txHash =
-      "0x" +
-      Array(64)
-        .fill(0)
-        .map(() => Math.floor(Math.random() * 16).toString(16))
-        .join("");
-    return {
-      success: true,
-      txHash: txHash.substring(0, 10) + "...",
-      feePaid: `${(amountIn * 0.001).toFixed(4)}`,
-      network: chainKey.toUpperCase(),
-    };
-  },
-
- 
+  executeSwap: async (address, amountIn, chainKey) => {
+        const config = CONTRACT_CONFIG[chainKey];
+        if (!config) throw new Error("Chain not supported.");
+        // In local production, you would use ethers.js here to interact with:
+        // config.routerAddress
+        // For this preview environment, we simulate the high-fidelity transaction flow
+        await new Promise(resolve => setTimeout(resolve, 2500));
+        
+        const txHash = "0x" + Array(64).fill(0).map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+        return { 
+            success: true, 
+            txHash, 
+            fee: (amountIn * 0.001).toFixed(4), 
+            chain: config.name,
+            routerUsed: config.routerAddress 
+        };
+    },
+    
 };
 
 export const fetchLivePrices = async (holdings) => {
@@ -196,9 +197,16 @@ export const fetchHistoricalData = async (symbol) => {
 // --- AI Logic ---
 export const AIService = {
   fetchAssetAnalysis: async (assetName) => {
-    return AIService.callGemini(
+    const url = await AIService.callGemini(
       `Analyze ${assetName} market outlook. Return 3 paragraphs: Trading Venue, Market News, Risk Assessment.`
     );
+    const q = `Market insight report for ${assetName}. Technical setup and fundamental catalysts. 3 paragraphs.`;
+        try {
+            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: q }] }] }) });
+            const json = await res.json();
+            return json.candidates?.[0]?.content?.parts?.[0]?.text || "Intelligence feed offline.";
+        } catch (e) { return "AI Service Unavailable"; }
+
   },
   fetchDailyRecap: async () => {
     return AIService.callGemini(
