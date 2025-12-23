@@ -2,12 +2,21 @@ export const CONTRACT_CONFIG = {
     base: { 
         chainId: '0x2105',
         routerAddress: '0x_WAITING_FOR_ROUTER_ON_BASE', 
-        gateway: '0x3a23F943181408EAC424116Af7b7790c94Cb97a5' 
+        gateway: '0x3a23F943181408EAC424116Af7b7790c94Cb97a5',
+        rpc: 'https://mainnet.base.org',
+        explorerApi: 'https://api.basescan.org/api'
     },
     mantle: { 
         chainId: '0x1388', 
         routerAddress: '0x85de3b7b75589f450f24bbfe0c02066a38716c37', 
-        gateway: '0x3a23F943181408EAC424116Af7b7790c94Cb97a5' 
+        gateway: '0x3a23F943181408EAC424116Af7b7790c94Cb97a5',
+        rpc: 'https://rpc.mantle.xyz',
+        explorerApi: 'https://api.mantlescan.xyz/api' 
+    },
+     ethereum: {
+        chainId: '0x1',
+        name: 'Ethereum',
+        rpc: 'https://eth.llamarpc.com'
     }
 };
 

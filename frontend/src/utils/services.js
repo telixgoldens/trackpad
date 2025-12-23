@@ -13,9 +13,63 @@ export const Web3Service = {
       throw new Error("User denied account access");
     }
   },
+  getLiveGasFees: async () => {
+        const fetchGas = async (rpc) => {
+            try {
+                const res = await fetch(rpc, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ jsonrpc: "2.0", method: "eth_gasPrice", params: [], id: 1 })
+                });
+                const data = await res.json();
+                return (parseInt(data.result, 16) / 1e9).toFixed(2);
+            } catch (e) { return "---"; }
+        };
+        const [eth, base, mantle] = await Promise.all([
+            fetchGas(CONTRACT_CONFIG.ethereum.rpc),
+            fetchGas(CONTRACT_CONFIG.base.rpc),
+            fetchGas(CONTRACT_CONFIG.mantle.rpc)
+        ]);
+        return { ethereum: eth, base, mantle };
+    },
+    getBungeeTokens: async () => {
+        try {
+            const res = await fetch('https://api.socket.tech/v2/token-lists/all', {
+                headers: { 'API-KEY': '72a5b4b0-e905-4978-8351-24c98053f548' }
+            });
+            const data = await res.json();
+            return data.result || [];
+        } catch (e) { return []; }
+    },
+    getWalletActivity: async (address, chainKey = 'mantle') => {
+        const config = CONTRACT_CONFIG[chainKey];
+        if (!config || !config.explorerApi) return [];
+        
+        try {
+            const url = `${config.explorerApi}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc`;
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            if (data.status === "1" && data.result) {
+                return data.result.map(tx => ({
+                    hash: tx.hash,
+                    from: tx.from,
+                    to: tx.to,
+                    value: (parseInt(tx.value) / 1e18).toFixed(4),
+                    timestamp: parseInt(tx.timeStamp) * 1000,
+                    method: tx.functionName?.split('(')[0] || (tx.to === "" ? "Deploy" : "Transfer"),
+                    isError: tx.isError === "1",
+                    chain: config.name
+                }));
+            }
+            return [];
+        } catch (e) {
+            console.error("Activity Fetch Error:", e);
+            return [];
+        }
+    },
 
   executeSwap: async (address, tokenIn, tokenOut, amountIn, chainKey) => {
-    // Simulate delay
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const txHash =
       "0x" +
@@ -31,47 +85,34 @@ export const Web3Service = {
     };
   },
 
-  getGasFees: async () => {
-    return {
-      ethereum: Math.floor(Math.random() * 15 + 10),
-      base: Math.random().toFixed(4),
-      bnb: Math.floor(Math.random() * 3 + 1),
-    };
-  },
+ 
 };
 
-// --- UTILS/marketDataService.js (STOCKS & CRYPTO) ---
 export const fetchLivePrices = async (holdings) => {
   const prices = {};
 
   // ⚠️ SECURE: Using process.env references for production security ⚠️
   // Ensure you define these variables in your local .env file.
-  const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY || "";
-  const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || "";
-  // -------------------------------------------------------------------
-
-  // 1. Fetch Crypto (CoinGecko)
-  const cryptoIds = holdings
-    .filter((h) => h.type === "crypto" && h.apiId)
-    .map((h) => h.apiId)
-    .join(",");
-  if (cryptoIds) {
-    try {
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds}&vs_currencies=usd&include_24hr_change=true`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        Object.keys(data).forEach((id) => {
-          prices[id] = { price: data[id].usd, change: data[id].usd_24h_change };
-        });
-      }
-    } catch (e) {
-      console.error("Crypto API Error", e);
+  const FINNHUB_KEY = process.env.FINNHUB_API_KEY || "";
+  const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || "";
+  const COINGECKO_KEY = process.env.COINGECKO_API_KEY || ""; 
+  
+  const cryptoItems = assets.filter(h => h.type === 'crypto');
+  const cryptoIds = cryptoItems.map(h => h.apiId).filter(id => !!id).join(',');
+    
+    if (cryptoIds) {
+        try {
+            const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds}&vs_currencies=usd&include_24hr_change=true${COINGECKO_KEY ? `&x_cg_demo_api_key=${COINGECKO_KEY}` : ''}`;
+            const res = await fetch(url);
+            if (res.ok) {
+                const data = await res.json();
+                cryptoItems.forEach(item => {
+                    if (data[item.apiId]) prices[item.apiId] = { price: data[item.apiId].usd, change: data[item.apiId].usd_24h_change };
+                });
+            }
+        } catch (e) {}
     }
-  }
 
-  // 2. Fetch Stocks (Finnhub -> Alpha Vantage -> Mock)
   const stocks = holdings.filter((h) => h.type === "stock");
   if (stocks.length > 0) {
     await Promise.all(
@@ -80,14 +121,13 @@ export const fetchLivePrices = async (holdings) => {
         let priceData = null;
 
         // A. Try Finnhub First
-        if (FINNHUB_API_KEY && !priceData) {
+        if (FINNHUB_KEY && !priceData) {
           try {
             const res = await fetch(
-              `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`
+              `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`
             );
             if (res.ok) {
               const data = await res.json();
-              // Finnhub returns { c: current price, dp: percent change }
               if (data.c) {
                 priceData = { price: data.c, change: data.dp };
               }
@@ -98,10 +138,10 @@ export const fetchLivePrices = async (holdings) => {
         }
 
         // B. Try Alpha Vantage (Fallback)
-        if (ALPHA_VANTAGE_API_KEY && !priceData) {
+        if (ALPHA_VANTAGE_KEY && !priceData) {
           try {
             const res = await fetch(
-              `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_API_KEY}`
+              `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${ALPHA_VANTAGE_KEY}`
             );
             if (res.ok) {
               const data = await res.json();
@@ -134,6 +174,24 @@ export const fetchLivePrices = async (holdings) => {
 
   return prices;
 };
+
+export const fetchHistoricalData = async (symbol) => {
+    const CMC_KEY = process.env.COINMARKETCAP_API_KEY || "";
+    if (!CMC_KEY) {
+        return Array.from({ length: 30 }, (_, i) => ({
+            date: new Date(Date.now() - (30 - i) * 86400000).toLocaleDateString(),
+            price: 2000 + Math.random() * 500
+        }));
+    }
+    try {
+        const res = await fetch(`https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/historical?symbol=${symbol}&count=30`, {
+            headers: { 'X-CMC_PRO_API_KEY': CMC_KEY }
+        });
+        const json = await res.json();
+        return json.data.quotes.map(q => ({ date: new Date(q.timestamp).toLocaleDateString(), price: q.quote.USD.price }));
+    } catch (e) { return []; }
+};
+
 
 // --- AI Logic ---
 export const AIService = {
@@ -178,7 +236,7 @@ export const AIService = {
     }
   },
   callGemini: async (userQuery) => {
-    const apiKey = ""; // Insert your Google Gemini API Key here
+    const apiKey = process.env.GEMINI_API_KEY; 
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
     const payload = { contents: [{ parts: [{ text: userQuery }] }] };
     try {
