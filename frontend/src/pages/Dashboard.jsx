@@ -7,7 +7,7 @@ import MetricCard from "../components/MetricCard";
 import VisualizationMock from "../components/VisualizationMock";
 import HoldingsTable from "../components/HoldingsTable";
 import AddHoldingForm from "../components/AddHoldingForm";
-import HistoricalChart from "../components/HistoricalChart";
+import InteractiveChart from "../components/InteractiveChart";
 import AIAnalysisSection from "../components/AIAnalysisSection";
 
 import { MOCK_HOLDINGS, DEFAULT_AI_RESPONSE } from "../utils/constants";
@@ -15,6 +15,7 @@ import {
   Web3Service,
   fetchLivePrices,
   AIService,
+  fetchHistoricalData,
   generateMockHistoricalData,
 } from "../utils/services";
 
@@ -24,6 +25,9 @@ const Dashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [portfolio, setPortfolio] = useState(MOCK_HOLDINGS);
   const [watchlist, setWatchlist] = useState([]);
+  const [bungeeTokens, setBungeeTokens] = useState([]);
+  const [activity, setActivity] = useState([]);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
 
   // UI State
   const [selectedAsset, setSelectedAsset] = useState(null);
@@ -38,35 +42,53 @@ const Dashboard = () => {
   const [swapTokenIn, setSwapTokenIn] = useState("");
   const [swapTokenOut, setSwapTokenOut] = useState("");
 
-  // Init Logic
-  useEffect(() => {
-    setWatchlist([{ id: "w1", symbol: "SOL", apiId: "solana", price: 0 }]);
-  }, []);
+ useEffect(() => { if (!selectedAsset && portfolio.length > 0) setSelectedAsset(portfolio[0]); }, [portfolio]);
 
-  // Price Polling
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const allAssets = [...portfolio, ...watchlist];
-      const prices = await fetchLivePrices(allAssets);
-      if (Object.keys(prices).length > 0) {
-        setPortfolio((prev) =>
-          prev.map((p) =>
-            p.apiId && prices[p.apiId]
-              ? { ...p, price: prices[p.apiId].usd }
-              : p
-          )
-        );
-        setWatchlist((prev) =>
-          prev.map((w) =>
-            w.apiId && prices[w.apiId]
-              ? { ...w, price: prices[w.apiId].usd }
-              : w
-          )
-        );
-      }
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [portfolio, watchlist]);
+    // Load Bungee Tokens
+    useEffect(() => {
+        Web3Service.getBungeeTokens().then(setBungeeTokens);
+    }, []);
+
+    // Fetch Activity Logic
+    useEffect(() => {
+        const fetchAct = async () => {
+            if (connected && address) {
+                setIsActivityLoading(true);
+                const realAct = await Web3Service.getWalletActivity(address);
+                setActivity(realAct);
+                setIsActivityLoading(false);
+            } else {
+                // High-fidelity Mock data for disconnected state
+                setActivity([
+                    { hash: "0x12...34", timestamp: Date.now() - 3600000, method: "Swap", value: "1.25", chain: "Base", isMock: true },
+                    { hash: "0x56...78", timestamp: Date.now() - 86400000, method: "Transfer", value: "500.00", chain: "Mantle", isMock: true },
+                    { hash: "0x90...ab", timestamp: Date.now() - 172800000, method: "Bridge", value: "0.05", chain: "Ethereum", isMock: true }
+                ]);
+            }
+        };
+        if (view === 'activity') fetchAct();
+    }, [view, connected, address]);
+
+    // Price Polling
+    useEffect(() => {
+        const update = async () => {
+            const all = [...portfolio, ...watchlist];
+            const live = await fetchLivePrices(all);
+            if (Object.keys(live).length > 0) {
+                setPortfolio(prev => prev.map(p => {
+                    const k = p.type === 'crypto' ? p.apiId : p.symbol;
+                    return live[k] ? { ...p, price: live[k].price, change: live[k].change } : p;
+                }));
+                setWatchlist(prev => prev.map(w => {
+                    const k = w.type === 'crypto' ? w.apiId : w.symbol;
+                    const d = live[k] ? { ...w, price: live[k].price } : w;
+                    if (d.target && d.price >= parseFloat(d.target)) setModal(`🎯 TARGET REACHED: ${d.symbol} is at $${d.price}`);
+                    return d;
+                }));
+            }
+        };
+        update(); const t = setInterval(update, 30000); return () => clearInterval(t);
+    }, [portfolio.length, watchlist.length]);
 
   const handleConnectWallet = async () => {
     try {
@@ -335,7 +357,7 @@ const Dashboard = () => {
           <div
             className={`w-full h-48 rounded-lg ${theme.bgPrimary} border ${theme.border}`}
           >
-            <HistoricalChart data={chartData} />
+            <InteractiveChart data={chartData} />
           </div>
           <div className={`pt-4 border-t ${theme.border}`}>
             <h3 className={`text-xl font-semibold mb-3 ${theme.textPrimary}`}>
