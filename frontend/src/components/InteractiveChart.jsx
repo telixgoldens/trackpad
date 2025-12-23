@@ -1,18 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
-const InteractiveChart = ({ symbol }) => {
+const InteractiveChart = ({ symbol, type }) => {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
     useEffect(() => {
         const load = async () => {
             setLoading(true);
-            const history = await fetchHistoricalData(symbol);
+            const history = await fetchHistoricalData(symbol, type);
             setData(history);
             setLoading(false);
         };
         if (symbol) load();
-    }, [symbol]);
+    }, [symbol, type]);
 
     if (loading) return <div className="h-48 flex items-center justify-center text-gray-500 animate-pulse font-black text-[10px]">SYNCING CHART...</div>;
     return (
