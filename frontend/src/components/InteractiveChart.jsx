@@ -24,6 +24,22 @@ const InteractiveChart = ({ symbol, type }) => {
 
     load();
   }, [symbol, type]);
+  
+  useEffect(() => {
+  if (!symbol) return;
+
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/cmc-history?id=${CMC_IDS[symbol]}`);
+      const latest = await res.json();
+
+      setData(latest.slice(-30));
+    } catch {}
+  }, 15000); // 15s refresh
+
+  return () => clearInterval(interval);
+}, [symbol]);
+
 
   if (loading) {
     return (

@@ -178,7 +178,17 @@ export const fetchLivePrices = async (holdings) => {
   return prices;
 };
 
-export const fetchHistoricalData = async (symbol, type) => {
+export const fetchHistoricalData = async (symbol, type, range = "1M") => {
+    const ranges = {
+    "1D": 1,
+    "7D": 7,
+    "1M": 30,
+    "3M": 90,
+    "1Y": 365
+  };
+
+  const days = ranges[range] || 30;
+  
     if (type === 'crypto' && CMC_IDS[symbol]) {
          try {
       const res = await fetch(`/api/cmc-history?id=${CMC_IDS[symbol]}`);
