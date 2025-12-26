@@ -1,3 +1,5 @@
+import { CMC_IDS } from "./cryptoMap";
+
 export const Web3Service = {
   isProviderAvailable: () => typeof window.ethereum !== "undefined",
 
@@ -94,10 +96,10 @@ export const fetchLivePrices = async (holdings) => {
 
   // ⚠️ SECURE: Using process.env references for production security ⚠️
   // Ensure you define these variables in your local .env file.
-  const FINNHUB_KEY = process.env.FINNHUB_API_KEY || "";
-  const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_API_KEY || "";
-  const COINGECKO_KEY = process.env.COINGECKO_API_KEY || ""; 
-  
+  const FINNHUB_KEY = process.env.VITE_FINNHUB_API_KEY || "";
+  const ALPHA_VANTAGE_KEY = process.env.VITE_ALPHA_VANTAGE_API_KEY || "";
+  const COINGECKO_KEY = process.env.VITE_COINGECKO_API_KEY || ""; 
+
   const cryptoItems = assets.filter(h => h.type === 'crypto');
   const cryptoIds = cryptoItems.map(h => h.apiId).filter(id => !!id).join(',');
     
@@ -177,45 +179,44 @@ export const fetchLivePrices = async (holdings) => {
 };
 
 export const fetchHistoricalData = async (symbol, type) => {
-    const CMC_KEY = process.env.COINMARKETCAP_API_KEY || "";
-    const FINNHUB_KEY = process.env.FINNHUB_API_KEY || "";
-
-    // 1. Handling Crypto with CoinMarketCap
-    if (type === 'crypto' && CMC_KEY) {
-        try {
-            const res = await fetch(`https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/historical?symbol=${symbol}&count=30`, {
-                headers: { 'X-CMC_PRO_API_KEY': CMC_KEY }
-            });
-            const json = await res.json();
-            return json.data.quotes.map(q => ({ date: new Date(q.timestamp).toLocaleDateString(), price: q.quote.USD.price }));
-        } catch (e) { console.error("CMC Historical Error", e); }
+    if (type === 'crypto' && CMC_IDS[symbol]) {
+         try {
+      const res = await fetch(`/api/cmc-history?id=${CMC_IDS[symbol]}`);
+      return await res.json();
+    } catch (e) {
+      console.error("CMC backend error", e);
     }
+  }
 
     // 2. Handling Stocks with Finnhub (using candles)
-    if (type === 'stock' && FINNHUB_KEY) {
-        try {
-            const to = Math.floor(Date.now() / 1000);
-            const from = to - (30 * 86400); // 30 days
-            const res = await fetch(`https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}&token=${FINNHUB_KEY}`);
-            const json = await res.json();
-            if (json.s === "ok") {
-                return json.t.map((timestamp, i) => ({
-                    date: new Date(timestamp * 1000).toLocaleDateString(),
-                    price: json.c[i]
-                }));
-            }
-        } catch (e) { console.error("Finnhub Historical Error", e); }
+    if (type === "stock" && process.env.VITE_FINNHUB_API_KEY) {
+    try {
+      const to = Math.floor(Date.now() / 1000);
+      const from = to - 30 * 86400;
+
+      const res = await fetch(
+        `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}&token=${process.env.VITE_FINNHUB_API_KEY}`
+      );
+
+      const json = await res.json();
+      if (json.s === "ok") {
+        return json.t.map((t, i) => ({
+          date: new Date(t * 1000).toLocaleDateString(),
+          price: json.c[i]
+        }));
+      }
+    } catch (e) {
+      console.error("Finnhub error", e);
     }
+  }
 
     // 3. Fallback: Dynamic Realistic Mock Data (Ensures price action is visible in preview)
-    return Array.from({ length: 30 }, (_, i) => {
-        const basePrice = symbol === 'BTC' ? 95000 : symbol === 'ETH' ? 3300 : symbol === 'TSLA' ? 240 : 150;
-        const volatility = type === 'crypto' ? 0.08 : 0.03;
-        return {
-            date: new Date(Date.now() - (30 - i) * 86400000).toLocaleDateString(),
-            price: basePrice * (1 + (Math.sin(i / 2) * 0.1) + (Math.random() * volatility - volatility/2))
-        };
-    });
+    console.warn("Using mock data for", symbol);
+  return Array.from({ length: 30 }, (_, i) => ({
+    date: new Date(Date.now() - (30 - i) * 86400000).toLocaleDateString(),
+    price: 100 + Math.sin(i / 2) * 10 + Math.random() * 5
+  }));
+
 };
 
 

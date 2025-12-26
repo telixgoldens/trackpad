@@ -5,18 +5,11 @@ import Modal from "../components/Modal";
 import GasFeeWidget from "../components/GasFeeWidget";
 import MetricCard from "../components/MetricCard";
 import VisualizationMock from "../components/VisualizationMock";
-import HoldingsTable from "../components/HoldingsTable";
 import AddHoldingForm from "../components/AddHoldingForm";
 import InteractiveChart from "../components/InteractiveChart";
-import AIAnalysisSection from "../components/AIAnalysisSection";
 
 import { MOCK_HOLDINGS, DEFAULT_AI_RESPONSE } from "../utils/constants";
-import {
-  Web3Service,
-  fetchLivePrices,
-  AIService,
-  fetchHistoricalData,
-} from "../utils/services";
+import { Web3Service, fetchLivePrices, AIService } from "../utils/services";
 
 const Dashboard = () => {
   const { theme } = useTheme();
@@ -104,7 +97,7 @@ const Dashboard = () => {
             const k = w.type === "crypto" ? w.apiId : w.symbol;
             const d = live[k] ? { ...w, price: live[k].price } : w;
             if (d.target && d.price >= parseFloat(d.target))
-              setModal(`🎯 TARGET REACHED: ${d.symbol} is at $${d.price}`);
+              setModal(`TARGET REACHED: ${d.symbol} is at $${d.price}`);
             return d;
           })
         );
@@ -114,6 +107,11 @@ const Dashboard = () => {
     const t = setInterval(update, 30000);
     return () => clearInterval(t);
   }, [portfolio.length, watchlist.length]);
+
+  useEffect(() => {
+    if (view === "recap" && dailyRecap.startsWith("AI is"))
+      AIService.fetchDailyRecap().then(setDailyRecap);
+  }, [view]);
 
   const handleConnectWallet = async () => {
     try {
@@ -232,33 +230,26 @@ const Dashboard = () => {
     );
   };
 
-  useEffect(() => {
-    if (view === "recap" && dailyRecap.startsWith("Loading"))
-      AIService.fetchDailyRecap().then(setDailyRecap);
-  }, [view]);
-
   const metrics = useMemo(() => {
-    const totalValue = portfolio.reduce(
-      (sum, item) => sum + item.quantity * item.price,
+    const total = portfolio.reduce(
+      (sum, item) => sum + item.quantity * (item.price || 0),
       0
     );
-    const totalPnl = portfolio.reduce(
-      (sum, item) =>
-        sum + (item.quantity * item.price - item.quantity * item.purchasePrice),
+    const cost = portfolio.reduce(
+      (sum, item) => sum + item.quantity * item.purchasePrice,
       0
     );
-    const cryptoValue = portfolio
+    const pnl = total - cost;
+    const crypt = portfolio
       .filter((i) => i.type === "crypto")
-      .reduce((sum, item) => sum + item.quantity * item.price, 0);
-    const stockValue = portfolio.reduce(
-      (sum, item) => sum + item.quantity * item.price,
-      0
-    );
+      .reduce((sum, item) => sum + item.quantity * (item.price || 0), 0);
+    // FIX: Ensuring metrics is never undefined for .toLocaleString
     return {
-      totalValue: totalValue.toFixed(2),
-      totalPnl: totalPnl.toFixed(2),
-      cryptoPercent: totalValue > 0 ? (cryptoValue / totalValue) * 100 : 0,
-      stockPercent: totalValue > 0 ? (stockValue / totalValue) * 100 : 0,
+      total: total || 0,
+      pnl: pnl || 0,
+      pnlPercent: cost > 0 ? (pnl / cost) * 100 : 0,
+      cryptoPercent: total > 0 ? (crypt / total) * 100 : 0,
+      stockPercent: total > 0 ? (1 - crypt / total) * 100 : 0,
     };
   }, [portfolio]);
 
@@ -285,7 +276,6 @@ const Dashboard = () => {
         </div>
         <VisualizationMock metrics={metrics} />
       </div>
-
       <div
         className={`${theme.bgSecondary} p-6 rounded-3xl border ${theme.border}`}
       >
@@ -309,7 +299,7 @@ const Dashboard = () => {
                   onClick={() => setSelectedAsset(h)}
                   className="hover:bg-white/5 cursor-pointer"
                 >
-                  <td className="py-4 px-2">{h.symbol}</td>
+                  <td className="py-4 px-2 font-black italic">{h.symbol}</td>
                   <td className="py-4 px-2 text-right text-gray-400">
                     {h.quantity}
                   </td>
@@ -328,21 +318,27 @@ const Dashboard = () => {
           <AddHoldingForm onAdd={(h) => setPortfolio([...portfolio, h])} />
         </div>
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div
           className={`${theme.bgSecondary} p-8 rounded-3xl border ${theme.border}`}
         >
-          <h2 className="text-xl font-black text-white mb-2">
-            {selectedAsset?.name} Chart
+          <h2 className="text-xl font-black text-white mb-2 italic uppercase">
+            {selectedAsset?.name} Matrix
           </h2>
-          <InteractiveChart symbol={selectedAsset?.symbol} />
+          <InteractiveChart
+            symbol={
+              selectedAsset?.type === "crypto"
+                ? selectedAsset?.apiId
+                : selectedAsset?.symbol
+            }
+            type={selectedAsset?.type}
+          />
         </div>
         <div
           className={`${theme.bgSecondary} p-8 rounded-3xl border ${theme.border} flex flex-col`}
         >
           <div className="flex justify-between items-center mb-6">
-            <h2 className="text-xl font-black text-white italic underline underline-offset-4 decoration-blue-500">
+            <h2 className="text-xl font-black text-white italic underline underline-offset-8 decoration-blue-500">
               AI Intelligence
             </h2>
             <button
@@ -356,9 +352,32 @@ const Dashboard = () => {
               Update Analysis
             </button>
           </div>
-          <p className="text-xs leading-relaxed text-gray-400 font-medium whitespace-pre-wrap">
-            {aiAnalysis}
-          </p>
+          <div className="space-y-4">
+            <div className="border-l-2 border-white/10 pl-4 py-1">
+              <p className="text-[9px] uppercase font-black text-gray-500 mb-1">
+                Execution Venue
+              </p>
+              <p className="text-xs text-white font-medium">
+                {aiAnalysis.tradingVenue}
+              </p>
+            </div>
+            <div className="border-l-2 border-white/10 pl-4 py-1">
+              <p className="text-[9px] uppercase font-black text-gray-500 mb-1">
+                Market Sentiment
+              </p>
+              <p className="text-xs text-white font-medium">
+                {aiAnalysis.marketNews}
+              </p>
+            </div>
+            <div className="border-l-2 border-white/10 pl-4 py-1">
+              <p className="text-[9px] uppercase font-black text-gray-500 mb-1">
+                Risk Profile
+              </p>
+              <p className="text-xs text-white font-medium">
+                {aiAnalysis.riskAssessment}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
