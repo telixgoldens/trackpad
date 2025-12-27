@@ -96,25 +96,25 @@ export const fetchLivePrices = async (holdings) => {
 
   // ⚠️ SECURE: Using process.env references for production security ⚠️
   // Ensure you define these variables in your local .env file.
-  const FINNHUB_KEY = process.env.VITE_FINNHUB_API_KEY || "";
-  const ALPHA_VANTAGE_KEY = process.env.VITE_ALPHA_VANTAGE_API_KEY || "";
-  const COINGECKO_KEY = process.env.VITE_COINGECKO_API_KEY || ""; 
+const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY || "";
+const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || "";
+const COINGECKO_KEY = import.meta.env.VITE_COINGECKO_API_KEY || "";
 
-  const cryptoItems = assets.filter(h => h.type === 'crypto');
-  const cryptoIds = cryptoItems.map(h => h.apiId).filter(id => !!id).join(',');
-    
-    if (cryptoIds) {
-        try {
-            const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds}&vs_currencies=usd&include_24hr_change=true${COINGECKO_KEY ? `&x_cg_demo_api_key=${COINGECKO_KEY}` : ''}`;
-            const res = await fetch(url);
-            if (res.ok) {
-                const data = await res.json();
-                cryptoItems.forEach(item => {
-                    if (data[item.apiId]) prices[item.apiId] = { price: data[item.apiId].usd, change: data[item.apiId].usd_24h_change };
-                });
-            }
-        } catch (e) {}
-    }
+
+  const cryptoItems = holdings.filter(h => h.type === 'crypto');
+  const cryptoIds = cryptoItems.map(h => h.coingeckoId).filter(id => !!id).join(',');
+  if (cryptoIds) {
+    try {
+      const url = `https://api.coingecko.com/api/v3/simple/price?ids=${cryptoIds}&vs_currencies=usd&include_24hr_change=true${COINGECKO_KEY ? `&x_cg_demo_api_key=${COINGECKO_KEY}` : ''}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        cryptoItems.forEach(item => {
+          if (data[item.coingeckoId]) prices[item.coingeckoId] = { price: data[item.coingeckoId].usd, change: data[item.coingeckoId].usd_24h_change };
+        });
+      }
+    } catch (e) {}
+  }
 
   const stocks = holdings.filter((h) => h.type === "stock");
   if (stocks.length > 0) {
@@ -178,7 +178,7 @@ export const fetchLivePrices = async (holdings) => {
   return prices;
 };
 
-export const fetchHistoricalData = async (symbol, type, range = "1M") => {
+export const fetchHistoricalData = async (id, type, range = "1M") => {
     const ranges = {
     "1D": 1,
     "7D": 7,
@@ -188,13 +188,30 @@ export const fetchHistoricalData = async (symbol, type, range = "1M") => {
   };
 
   const days = ranges[range] || 30;
-  
-    if (type === 'crypto' && CMC_IDS[symbol]) {
-         try {
-      const res = await fetch(`/api/cmc-history?id=${CMC_IDS[symbol]}`);
-      return await res.json();
-    } catch (e) {
-      console.error("CMC backend error", e);
+
+    if (type === 'crypto') {
+    // Accept numeric CoinMarketCap id, ticker (e.g. 'ETH'), or name ('ethereum')
+    let id = null;
+    if (typeof id === 'number' || /^[0-9]+$/.test(String(id))) {
+      id = String(id);
+    } else {
+      const code = String(id).toUpperCase();
+      if (CMC_IDS[code]) id = String(CMC_IDS[code]);
+      else {
+        const found = Object.keys(CMC_IDS).find(k => k.toLowerCase() === String(id).toLowerCase());
+        if (found) id = String(CMC_IDS[found]);
+      }
+    }
+
+    if (id) {
+      try {
+        const res = await fetch(`http://localhost:3001/api/cmc-history?id=${id}&count=${days}`);
+        if (res.ok) return await res.json();
+        const err = await res.json().catch(() => ({}));
+        console.warn('CMC backend non-ok', res.status, err);
+      } catch (e) {
+        console.error("CMC backend error", e);
+      }
     }
   }
 
@@ -221,9 +238,9 @@ export const fetchHistoricalData = async (symbol, type, range = "1M") => {
   }
 
     // 3. Fallback: Dynamic Realistic Mock Data (Ensures price action is visible in preview)
-    console.warn("Using mock data for", symbol);
-  return Array.from({ length: 30 }, (_, i) => ({
-    date: new Date(Date.now() - (30 - i) * 86400000).toLocaleDateString(),
+    console.warn("Using mock data for", id);
+  return Array.from({ length: days }, (_, i) => ({
+    date: new Date(Date.now() - (days - i) * 86400000).toLocaleDateString(),
     price: 100 + Math.sin(i / 2) * 10 + Math.random() * 5
   }));
 

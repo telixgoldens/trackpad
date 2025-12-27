@@ -16,11 +16,24 @@ export default async function handler(req, res) {
     );
 
     const json = await response.json();
-    const quotes = json.data[id].quotes;
+    const payload = json?.data;
 
-    const data = quotes.map(q => ({
-      date: new Date(q.timestamp).toLocaleDateString(),
-      price: q.quote.USD.close
+    let quotes = null;
+    if (payload == null) {
+      return res.status(502).json({ error: "Invalid CMC payload" });
+    }
+
+    if (payload[id] && Array.isArray(payload[id].quotes)) {
+      quotes = payload[id].quotes;
+    } else if (Array.isArray(payload.quotes)) {
+      quotes = payload.quotes;
+    }
+
+    if (!quotes) return res.status(502).json({ error: "Invalid CMC payload" });
+
+    const data = quotes.map((q) => ({
+      date: new Date(q.timestamp || q.quote?.USD?.timestamp).toISOString(),
+      price: q.quote?.USD?.close ?? null,
     }));
 
     res.status(200).json(data);

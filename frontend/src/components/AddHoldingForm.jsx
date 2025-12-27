@@ -9,7 +9,29 @@ const AddHoldingForm = ({ onAdd }) => {
     const [cgId, setCgId] = useState('');
     const handleSubmit = (e) => {
         e.preventDefault();
-        onAdd({ id: crypto.randomUUID(), symbol: symbol.toUpperCase(), type, apiId: type === 'crypto' ? cgId : symbol.toUpperCase(), name: symbol.toUpperCase(), quantity: parseFloat(qty) || 0, purchasePrice: parseFloat(buy) || 0, price: 0 });
+        if (type === 'crypto') {
+            onAdd({
+                id: crypto.randomUUID(),
+                symbol: symbol.toUpperCase(),
+                type,
+                coingeckoId: cgId,
+                cmcSymbol: symbol.toUpperCase(),
+                name: symbol.toUpperCase(),
+                quantity: parseFloat(qty) || 0,
+                purchasePrice: parseFloat(buy) || 0,
+                price: 0
+            });
+        } else {
+            onAdd({
+                id: crypto.randomUUID(),
+                symbol: symbol.toUpperCase(),
+                type,
+                name: symbol.toUpperCase(),
+                quantity: parseFloat(qty) || 0,
+                purchasePrice: parseFloat(buy) || 0,
+                price: 0
+            });
+        }
         setSymbol(''); setQty(''); setBuy(''); setCgId('');
     };
     const input = "w-full p-5 bg-black border border-white/5 rounded-[22px] text-white text-[11px] font-black uppercase tracking-widest focus:border-blue-500 transition focus:outline-none";

@@ -21,9 +21,9 @@ export const CONTRACT_CONFIG = {
 };
 
 export const MOCK_HOLDINGS = [
-    { id: '1', type: 'crypto', symbol: 'ETH', apiId: 'ethereum', name: 'Ethereum', quantity: 5.2, purchasePrice: 2500, price: 0, change: 0 },
-    { id: '2', type: 'crypto', symbol: 'BTC', apiId: 'bitcoin', name: 'Bitcoin', quantity: 0.45, purchasePrice: 45000, price: 0, change: 0 },
-    { id: '3', type: 'stock', symbol: 'TSLA', apiId: 'tesla', name: 'Tesla', quantity: 15, purchasePrice: 180, price: 210, change: 1.2 },
+    { id: '1', type: 'crypto', symbol: 'ETH', coingeckoId: 'ethereum', cmcSymbol: 'ETH', name: 'Ethereum', quantity: 5.2, purchasePrice: 2500, price: 0, change: 0 },
+    { id: '2', type: 'crypto', symbol: 'BTC', coingeckoId: 'bitcoin', cmcSymbol: 'BTC', name: 'Bitcoin', quantity: 0.45, purchasePrice: 45000, price: 0, change: 0 },
+    { id: '3', type: 'stock', symbol: 'TSLA', coingeckoId: 'tesla', name: 'Tesla', quantity: 15, purchasePrice: 180, price: 210, change: 1.2 },
 ];
 
 export const DEFAULT_AI_RESPONSE = {

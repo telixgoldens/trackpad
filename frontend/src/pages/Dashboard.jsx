@@ -15,7 +15,15 @@ const Dashboard = () => {
   const { theme } = useTheme();
   const [view, setView] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [portfolio, setPortfolio] = useState(MOCK_HOLDINGS);
+  const [user, setUser] = useState(() => localStorage.getItem('trackpad_user') || "");
+  const [portfolio, setPortfolio] = useState(() => {
+    const u = localStorage.getItem('trackpad_user');
+    if (u) {
+      const saved = localStorage.getItem(`trackpad_portfolio_${u}`);
+      if (saved) return JSON.parse(saved);
+    }
+    return MOCK_HOLDINGS;
+  });
   const [watchlist, setWatchlist] = useState([]);
   const [bungeeTokens, setBungeeTokens] = useState([]);
   const [activity, setActivity] = useState([]);
@@ -27,6 +35,34 @@ const Dashboard = () => {
   const [dailyRecap, setDailyRecap] = useState("Loading AI Market Recap...");
   const [aiAnalysis, setAiAnalysis] = useState(DEFAULT_AI_RESPONSE);
   const [swapAmount, setSwapAmount] = useState("");
+  // Persist portfolio to localStorage per user
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem(`trackpad_portfolio_${user}`, JSON.stringify(portfolio));
+    }
+  }, [portfolio, user]);
+
+  // Simple sign-in form
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900">
+        <div className="bg-gray-800 p-8 rounded-2xl shadow-xl">
+          <h2 className="text-2xl font-bold text-white mb-4">Sign In</h2>
+          <form onSubmit={e => {
+            e.preventDefault();
+            const v = e.target.username.value.trim();
+            if (v) {
+              localStorage.setItem('trackpad_user', v);
+              setUser(v);
+            }
+          }}>
+            <input name="username" placeholder="Enter username" className="p-3 rounded bg-gray-700 text-white mb-4 w-full" required />
+            <button type="submit" className="w-full py-2 bg-blue-500 text-white rounded font-bold">Sign In</button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     if (!selectedAsset && portfolio.length > 0) setSelectedAsset(portfolio[0]);
@@ -40,9 +76,9 @@ const Dashboard = () => {
   // Fetch Activity Logic
   useEffect(() => {
     const fetchAct = async () => {
-      if (connected && address) {
+      if (walletConnected && walletAddress) {
         setIsActivityLoading(true);
-        const realAct = await Web3Service.getWalletActivity(address);
+        const realAct = await Web3Service.getWalletActivity(walletAddress);
         setActivity(realAct);
         setIsActivityLoading(false);
       } else {
@@ -86,7 +122,7 @@ const Dashboard = () => {
       if (Object.keys(live).length > 0) {
         setPortfolio((prev) =>
           prev.map((p) => {
-            const k = p.type === "crypto" ? p.apiId : p.symbol;
+            const k = p.type === "crypto" ? p.coingeckoId : p.symbol;
             return live[k]
               ? { ...p, price: live[k].price, change: live[k].change }
               : p;
@@ -94,10 +130,10 @@ const Dashboard = () => {
         );
         setWatchlist((prev) =>
           prev.map((w) => {
-            const k = w.type === "crypto" ? w.apiId : w.symbol;
+            const k = w.type === "crypto" ? w.coingeckoId : w.symbol;
             const d = live[k] ? { ...w, price: live[k].price } : w;
             if (d.target && d.price >= parseFloat(d.target))
-              setModal(`TARGET REACHED: ${d.symbol} is at $${d.price}`);
+              setModalContent(`TARGET REACHED: ${d.symbol} is at $${d.price}`);
             return d;
           })
         );
@@ -325,12 +361,9 @@ const Dashboard = () => {
           <h2 className="text-xl font-black text-white mb-2 italic uppercase">
             {selectedAsset?.name} Matrix
           </h2>
+
           <InteractiveChart
-            symbol={
-              selectedAsset?.type === "crypto"
-                ? selectedAsset?.apiId
-                : selectedAsset?.symbol
-            }
+            symbol={selectedAsset?.cmcSymbol || selectedAsset?.symbol}
             type={selectedAsset?.type}
           />
         </div>
