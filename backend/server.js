@@ -65,4 +65,77 @@ app.get("/api/cmc-history", async (req, res) => {
   }
 });
 
+// ================================
+// BUNGEE / SOCKET BACKEND ROUTES
+// ================================
+
+const BUNGEE_BASE = "https://dedicated-backend.bungee.exchange/api/v1";
+
+const BUNGEE_HEADERS = {
+  "x-api-key": process.env.BUNGEE_API_KEY,
+  "affiliate": process.env.BUNGEE_AFFILIATE_ID,
+  "Content-Type": "application/json",
+};
+
+// Supported chains
+app.get("/api/bungee/supported-chains", async (req, res) => {
+  try {
+    const r = await fetch(`${BUNGEE_BASE}/supported-chains`, {
+      headers: BUNGEE_HEADERS,
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    console.error("Bungee chains error:", e);
+    res.status(500).json({ error: "Bungee chains fetch failed" });
+  }
+});
+
+// Token list
+app.get("/api/bungee/tokens", async (req, res) => {
+  try {
+    const r = await fetch(`${BUNGEE_BASE}/token-lists/all`, {
+      headers: BUNGEE_HEADERS,
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    console.error("Bungee tokens error:", e);
+    res.status(500).json({ error: "Bungee tokens fetch failed" });
+  }
+});
+
+// Quote
+app.post("/api/bungee/quote", async (req, res) => {
+  try {
+    const r = await fetch(`${BUNGEE_BASE}/quote`, {
+      method: "POST",
+      headers: BUNGEE_HEADERS,
+      body: JSON.stringify(req.body),
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    console.error("Bungee quote error:", e);
+    res.status(500).json({ error: "Bungee quote failed" });
+  }
+});
+
+// Build transaction
+app.post("/api/bungee/build-tx", async (req, res) => {
+  try {
+    const r = await fetch(`${BUNGEE_BASE}/build-tx`, {
+      method: "POST",
+      headers: BUNGEE_HEADERS,
+      body: JSON.stringify(req.body),
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    console.error("Bungee build tx error:", e);
+    res.status(500).json({ error: "Bungee build tx failed" });
+  }
+});
+
+
 app.listen(3001, () => console.log("Backend running on :3001"));
