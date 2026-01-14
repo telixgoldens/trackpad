@@ -667,7 +667,7 @@ const Dashboard = () => {
               </div>
               <div className="flex items-center">
                 <select
-                  className="bg-transparent text-xl font-black text-dark focus:outline-none w-full"
+                  className="bg-transparent text-xl font-white text-dark focus:outline-none w-full"
                   value={selectedToToken}
                   onChange={(e) => {
                     setSelectedToToken(e.target.value);

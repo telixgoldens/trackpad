@@ -73,7 +73,7 @@ export const Web3Service = {
       return "0x0";
     }
   },
-  
+
   getLiveGasFees: async () => {
     const fetchGas = async (rpc) => {
       try {
@@ -299,6 +299,40 @@ export const Web3Service = {
       console.log("Building transaction...");
 
       const quoteId = selectedRoute.quoteId;
+      console.log("Quote ID:", quoteId);
+      console.log("Quote Expiry:", selectedRoute.quoteExpiry ? new Date(selectedRoute.quoteExpiry * 1000).toISOString() : "No expiry");
+      
+      if (!quoteId) {
+        console.error("Route missing quoteId:", selectedRoute);
+        throw new Error("Selected route does not have quoteId");
+      }
+      
+      // Check if quote is already expired
+      if (selectedRoute.quoteExpiry) {
+        const now = Math.floor(Date.now() / 1000);
+        const timeLeft = selectedRoute.quoteExpiry - now;
+        console.log("Quote expires in:", timeLeft, "seconds");
+        
+        if (timeLeft < 5) {
+          console.warn("Quote is about to expire! Getting new quote...");
+          // Get a fresh quote
+          const freshQuoteResponse = await fetch(quoteUrl);
+          if (!freshQuoteResponse.ok) {
+            throw new Error("Failed to get fresh quote");
+          }
+          const freshQuote = await freshQuoteResponse.json();
+          
+          // Select fresh route
+          if (freshQuote.result.autoRoute) {
+            selectedRoute = freshQuote.result.autoRoute;
+          } else if (freshQuote.result.manualRoutes && freshQuote.result.manualRoutes.length > 0) {
+            selectedRoute = freshQuote.result.manualRoutes[0];
+          }
+          
+          console.log("Fresh quote ID:", selectedRoute.quoteId);
+        }
+      }
+      
       const buildTxParams = new URLSearchParams({
         quoteId: quoteId,
         userAddress: userAddress,
@@ -358,25 +392,37 @@ export const Web3Service = {
         // Send approval transaction first
         console.log("Requesting token approval...");
         try {
+          const approvalTx = {
+            from: userAddress,
+            to: approvalData.to || approvalData.tokenAddress || fromToken,
+            data: approvalData.data,
+            value: "0x0"
+          };
+          
+          console.log("Approval transaction:", approvalTx);
           const approvalTxHash = await window.ethereum.request({
             method: "eth_sendTransaction",
-            params: [{
-              from: userAddress,
-              to: approvalData.to || approvalData.tokenAddress,
-              data: approvalData.data,
-              value: "0x0"
-            }]
+            params: [approvalTx]
           });
           
           console.log("Approval transaction sent:", approvalTxHash);
           console.log("Waiting for approval confirmation...");
           
           // Wait for approval to be mined
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise(resolve => setTimeout(resolve, 2000));
           
           console.log("Approval confirmed, proceeding with swap...");
         } catch (approvalError) {
-          console.error("Approval failed:", approvalError);
+           console.error("Approval failed:", approvalError);
+          
+          // Check if user rejected
+          if (approvalError.code === 4001) {
+            throw new Error("Token approval rejected by user");
+          }
+          
+          // Check the error message
+          const errorMsg = approvalError.message || approvalError.toString();
+          console.error("Approval error details:", errorMsg);
           throw new Error("Token approval failed: " + approvalError.message);
         }
       } else if (!isNativeTokenSwap) {
