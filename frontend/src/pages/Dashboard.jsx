@@ -11,13 +11,24 @@ import InteractiveChart from "../components/InteractiveChart";
 import { MOCK_HOLDINGS, DEFAULT_AI_RESPONSE } from "../utils/constants";
 import { Web3Service, fetchLivePrices, AIService } from "../utils/services";
 
+const TOKEN_ADDRESSES = {
+  MNT: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+  WMNT: "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8",
+  USDC: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9",
+  USDT0: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+  USDT: "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE",
+  WETH: "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111",
+};
+
 const Dashboard = () => {
   const { theme } = useTheme();
   const [view, setView] = useState("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [user, setUser] = useState(() => localStorage.getItem('trackpad_user') || "");
+  const [user, setUser] = useState(
+    () => localStorage.getItem("trackpad_user") || ""
+  );
   const [portfolio, setPortfolio] = useState(() => {
-    const u = localStorage.getItem('trackpad_user');
+    const u = localStorage.getItem("trackpad_user");
     if (u) {
       const saved = localStorage.getItem(`trackpad_portfolio_${u}`);
       if (saved) return JSON.parse(saved);
@@ -35,29 +46,50 @@ const Dashboard = () => {
   const [dailyRecap, setDailyRecap] = useState("Loading AI Market Recap...");
   const [aiAnalysis, setAiAnalysis] = useState(DEFAULT_AI_RESPONSE);
   const [swapAmount, setSwapAmount] = useState("");
-  // Persist portfolio to localStorage per user
+  const [selectedFromToken, setSelectedFromToken] = useState(
+    TOKEN_ADDRESSES.MNT
+  );
+  const [selectedToToken, setSelectedToToken] = useState(TOKEN_ADDRESSES.USDC);
+  const [swapError, setSwapError] = useState("");
+  const [fromTokenBalance, setFromTokenBalance] = useState("0");
+  const [toTokenBalance, setToTokenBalance] = useState("0");
+
   useEffect(() => {
     if (user) {
-      localStorage.setItem(`trackpad_portfolio_${user}`, JSON.stringify(portfolio));
+      localStorage.setItem(
+        `trackpad_portfolio_${user}`,
+        JSON.stringify(portfolio)
+      );
     }
   }, [portfolio, user]);
 
-  // Simple sign-in form
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900">
         <div className="bg-gray-800 p-8 rounded-2xl shadow-xl">
           <h2 className="text-2xl font-bold text-white mb-4">Sign In</h2>
-          <form onSubmit={e => {
-            e.preventDefault();
-            const v = e.target.username.value.trim();
-            if (v) {
-              localStorage.setItem('trackpad_user', v);
-              setUser(v);
-            }
-          }}>
-            <input name="username" placeholder="Enter username" className="p-3 rounded bg-gray-700 text-white mb-4 w-full" required />
-            <button type="submit" className="w-full py-2 bg-blue-500 text-white rounded font-bold">Sign In</button>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const v = e.target.username.value.trim();
+              if (v) {
+                localStorage.setItem("trackpad_user", v);
+                setUser(v);
+              }
+            }}
+          >
+            <input
+              name="username"
+              placeholder="Enter username"
+              className="p-3 rounded bg-gray-700 text-white mb-4 w-full"
+              required
+            />
+            <button
+              type="submit"
+              className="w-full py-2 bg-blue-500 text-white rounded font-bold"
+            >
+              Sign In
+            </button>
           </form>
         </div>
       </div>
@@ -68,12 +100,25 @@ const Dashboard = () => {
     if (!selectedAsset && portfolio.length > 0) setSelectedAsset(portfolio[0]);
   }, [portfolio]);
 
-  // Load Bungee Tokens
   useEffect(() => {
-    Web3Service.getBungeeTokens().then(setBungeeTokens);
+    const loadTokens = async () => {
+      try {
+        const tokens = await Web3Service.getBungeeTokens();
+        if (Array.isArray(tokens)) {
+          setBungeeTokens(tokens);
+        } else {
+          console.warn("getBungeeTokens did not return an array:", tokens);
+          setBungeeTokens([]);
+        }
+      } catch (error) {
+        console.error("Error loading Bungee tokens:", error);
+        setBungeeTokens([]);
+      }
+    };
+
+    loadTokens();
   }, []);
 
-  // Fetch Activity Logic
   useEffect(() => {
     const fetchAct = async () => {
       if (walletConnected && walletAddress) {
@@ -82,7 +127,6 @@ const Dashboard = () => {
         setActivity(realAct);
         setIsActivityLoading(false);
       } else {
-        // High-fidelity Mock data for disconnected state
         setActivity([
           {
             hash: "0x12...34",
@@ -114,7 +158,28 @@ const Dashboard = () => {
     if (view === "activity") fetchAct();
   }, [view, walletConnected, walletAddress]);
 
-  // Price Polling
+  useEffect(() => {
+    const fetchBalances = async () => {
+      if (walletConnected && walletAddress) {
+        try {
+          const fromBalance = await Web3Service.getTokenBalance(
+            selectedFromToken,
+            walletAddress
+          );
+          const toBalance = await Web3Service.getTokenBalance(
+            selectedToToken,
+            walletAddress
+          );
+          setFromTokenBalance(fromBalance);
+          setToTokenBalance(toBalance);
+        } catch (error) {
+          console.error("Error fetching balances:", error);
+        }
+      }
+    };
+    fetchBalances();
+  }, [walletConnected, walletAddress, selectedFromToken, selectedToToken]);
+
   useEffect(() => {
     const update = async () => {
       const all = [...portfolio, ...watchlist];
@@ -171,17 +236,50 @@ const Dashboard = () => {
   };
 
   const handleSwap = async () => {
-    if (!walletConnected)
+    setSwapError("");
+
+    if (!walletConnected) {
       return setModalContent(<p className="p-4">Connect wallet first.</p>);
-    if (!swapAmount || parseFloat(swapAmount) <= 0)
-      return setModalContent("Enter a valid amount.");
+    }
+
+    if (!swapAmount || parseFloat(swapAmount) <= 0) {
+      setSwapError("Enter a valid amount...");
+      return setModalContent(<p className="p-4">Enter a valid amount....</p>);
+    }
+
+    if (!selectedFromToken || !selectedToToken) {
+      setSwapError("Please select both tokens");
+      return setModalContent(<p className="p-4">Please select both tokens.</p>);
+    }
+
+    if (selectedFromToken === selectedToToken) {
+      setSwapError("Cannot swap same token");
+      return setModalContent(
+        <p className="p-4">Cannot swap the same token.</p>
+      );
+    }
+
     setModalContent(<p className="p-4">Initiating Swap...</p>);
     try {
-      const receipt = await Web3Service.executeSwap(
-        walletAddress,
-        swapAmount,
-        "mantle"
-      );
+      const decimals = 18; // MNT has 18 decimals
+      const amountInSmallestUnit = (
+        parseFloat(swapAmount) * Math.pow(10, decimals)
+      ).toFixed(0);
+      console.log("Swap params:", {
+        fromToken: selectedFromToken,
+        toToken: selectedToToken,
+        amount: amountInSmallestUnit,
+        amountReadable: swapAmount,
+        decimals: decimals,
+        userAddress: walletAddress,
+      });
+      const receipt = await Web3Service.executeSwap({
+        fromToken: selectedFromToken,
+        toToken: selectedToToken,
+        amount: amountInSmallestUnit,
+        userAddress: walletAddress,
+        slippage: 0.5,
+      });
       setModalContent(
         <div className="p-4">
           <h3 className="text-xl font-bold text-green-500">Success</h3>
@@ -445,7 +543,6 @@ const Dashboard = () => {
         className={`${theme.bgSecondary} p-12 rounded-[60px] shadow-2xl border ${theme.border}`}
       >
         <div className="flex items-center mb-8">
-          <span className="mr-5 text-5xl">☕</span>
           <div>
             <h2
               className={`text-4xl font-black italic tracking-tighter text-white uppercase`}
@@ -498,59 +595,95 @@ const Dashboard = () => {
           </div>
         ) : (
           <div className="space-y-4">
+            {swapError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 text-center">
+                <p className="text-red-500 text-sm font-bold">{swapError}</p>
+              </div>
+            )}
             <div className="bg-black/40 p-6 rounded-[30px] border border-white/5">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">
-                From Asset
-              </label>
+               <div className="flex justify-between items-center mb-3">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  From Asset
+                </label>
+                <span className="text-[10px] font-black text-gray-400">
+                  Balance: {(parseInt(fromTokenBalance, 16) / 1e18).toFixed(4)}
+                </span>
+              </div>
               <div className="flex items-center">
-                <select className="bg-transparent text-xl font-black text-white focus:outline-none w-full">
-                  <optgroup label="Real-Time Wallet">
-                    <option>MNT (742.50)</option>
-                    <option>USDC (2,400.00)</option>
-                  </optgroup>
-                  <optgroup label="Bungee Supported Networks">
-                    {bungeeTokens.slice(0, 30).map((t) => (
-                      <option key={t.address}>{t.symbol}</option>
+                <select
+                  className="bg-transparent text-xl font-black text-dark focus:outline-none w-full"
+                  value={selectedFromToken}
+                  onChange={(e) => {
+                    setSelectedFromToken(e.target.value);
+                    setSwapError("");
+                  }}
+                >
+                  <option value={TOKEN_ADDRESSES.MNT}>MNT</option>
+                  <option value={TOKEN_ADDRESSES.USDC}>USDC</option>
+                  <option value={TOKEN_ADDRESSES.USDT}>USDT</option>
+                  <option value={TOKEN_ADDRESSES.WETH}>WETH</option>
+                  {Array.isArray(bungeeTokens) &&
+                    bungeeTokens.slice(0, 30).map((t) => (
+                      <option key={t.address} value={t.address}>
+                        {t.symbol} ({t.name})
+                      </option>
                     ))}
-                  </optgroup>
                 </select>
                 <input
                   type="number"
                   placeholder="0.0"
                   className="bg-transparent text-right text-3xl font-black text-white w-full focus:outline-none"
                   value={swapAmount}
-                  onChange={(e) => setSwapAmount(e.target.value)}
+                  onChange={(e) => {
+                    setSwapAmount(e.target.value);
+                    setSwapError("");
+                  }}
                 />
               </div>
             </div>
             <div className="flex justify-center -my-5 relative z-10">
-              <div className="bg-yellow-500 p-4 rounded-full text-black shadow-xl">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="3"
-                    d="M19 14l-7 7m0 0l-7-7m7 7V3"
-                  />
+              <button
+                onClick={() => {
+                  const tempToken = selectedFromToken;
+                  setSelectedFromToken(selectedToToken);
+                  setSelectedToToken(tempToken);
+                }}
+                className="bg-yellow-500 p-4 rounded-full hover:scale-110 cursor-pointer"
+              >
+                {/* New swap arrows icon */}
+                <svg>
+                  <path d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                 </svg>
-              </div>
+              </button>
             </div>
             <div className="bg-black/40 p-6 rounded-[30px] border border-white/5">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-3 block">
-                To Asset
-              </label>
+              <div className="flex justify-between items-center mb-3">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                  To Asset
+                </label>
+                <span className="text-[10px] font-black text-gray-400">
+                  Balance: {(parseInt(toTokenBalance, 16) / 1e18).toFixed(4)}
+                </span>
+              </div>
               <div className="flex items-center">
-                <select className="bg-transparent text-xl font-black text-white focus:outline-none w-full">
-                  {bungeeTokens.slice(0, 50).map((t) => (
-                    <option key={t.address}>
-                      {t.symbol} ({t.name})
-                    </option>
-                  ))}
+                <select
+                  className="bg-transparent text-xl font-black text-dark focus:outline-none w-full"
+                  value={selectedToToken}
+                  onChange={(e) => {
+                    setSelectedToToken(e.target.value);
+                    setSwapError("");
+                  }}
+                >
+                  <option value={TOKEN_ADDRESSES.MNT}>MNT</option>
+                  <option value={TOKEN_ADDRESSES.USDC}>USDC</option>
+                  <option value={TOKEN_ADDRESSES.USDT}>USDT</option>
+                  <option value={TOKEN_ADDRESSES.WETH}>WETH</option>
+                  {Array.isArray(bungeeTokens) &&
+                    bungeeTokens.slice(0, 50).map((t) => (
+                      <option key={t.address} value={t.address}>
+                        {t.symbol} ({t.name})
+                      </option>
+                    ))}
                 </select>
                 <p className="text-right text-3xl font-black text-gray-700 w-full">
                   0.00

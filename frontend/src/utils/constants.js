@@ -37,3 +37,15 @@ export const THEME_CLASSES = {
     dark: { bgPrimary: 'bg-gray-900', bgSecondary: 'bg-gray-800', textPrimary: 'text-gray-50', textSecondary: 'text-gray-400', accentBg: 'bg-yellow-500 hover:bg-yellow-600', accentText: 'text-yellow-400', border: 'border-gray-700', shadow: 'shadow-2xl shadow-gray-950/50', pnlPositive: 'text-green-400 bg-green-900', pnlNegative: 'text-red-400 bg-red-900' }
 };
 
+export const MOCK_TOKENS= [
+      { symbol: "MNT", name: "Mantle", address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" },
+      { symbol: "USDC", name: "USD Coin", address: "0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9" },
+      { symbol: "USDT", name: "Tether", address: "0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE" },
+      { symbol: "WETH", name: "Wrapped Ethereum", address: "0xdEAddEaDdeadDEadDEADDEAddEADDEAddead1111" },
+      { symbol: "WMNT", name: "Wrapped Mantle", address: "0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8" },
+      { symbol: "WBTC", name: "Wrapped Bitcoin", address: "0xCAbAE6f6Ea1ecaB08Ad02fE02ce9A44F09aebfA2" },
+      { symbol: "DAI", name: "Dai Stablecoin", address: "0x5A7a183B6B44Dc4EC2E3d2eF43F98C5152b1d76d" },
+      { symbol: "USDY", name: "USDY", address: "0x5bE26527e817998A7206475496fDE1E68957c5A6" },
+      { symbol: "FBTC", name: "Fintegra Bitcoin", address: "0xC96dE26018A54D51c097160568752c4E3BD6C364" },
+      { symbol: "METH", name: "Mantle Staked ETH", address: "0xcDA86A272531e8640cD7F1a92c01839911B90bb0" }
+    ];

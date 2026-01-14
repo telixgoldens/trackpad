@@ -69,7 +69,9 @@ app.get("/api/cmc-history", async (req, res) => {
 // BUNGEE / SOCKET BACKEND ROUTES
 // ================================
 
-const BUNGEE_BASE = "https://dedicated-backend.bungee.exchange/api/v1";
+// CORRECTED BUNGEE BACKEND ENDPOINTS
+
+const BUNGEE_BASE = "https://dedicated-backend.bungee.exchange";
 
 const BUNGEE_HEADERS = {
   "x-api-key": process.env.BUNGEE_API_KEY,
@@ -80,7 +82,7 @@ const BUNGEE_HEADERS = {
 // Supported chains
 app.get("/api/bungee/supported-chains", async (req, res) => {
   try {
-    const r = await fetch(`${BUNGEE_BASE}/supported-chains`, {
+    const r = await fetch(`${BUNGEE_BASE}/api/v1/supported-chains`, {
       headers: BUNGEE_HEADERS,
     });
     const data = await r.json();
@@ -94,10 +96,15 @@ app.get("/api/bungee/supported-chains", async (req, res) => {
 // Token list
 app.get("/api/bungee/tokens", async (req, res) => {
   try {
-    const r = await fetch(`${BUNGEE_BASE}/token-lists/all`, {
+    const r = await fetch(`${BUNGEE_BASE}/api/v1/tokens/list`, {
       headers: BUNGEE_HEADERS,
     });
     const data = await r.json();
+    
+    if (!r.ok) {
+      return res.status(r.status).json(data);
+    }
+
     res.json(data);
   } catch (e) {
     console.error("Bungee tokens error:", e);
@@ -105,35 +112,66 @@ app.get("/api/bungee/tokens", async (req, res) => {
   }
 });
 
-// Quote
-app.post("/api/bungee/quote", async (req, res) => {
+// FIX: Quote endpoint - Forward query parameters!
+app.get("/api/bungee/quote", async (req, res) => {
   try {
-    const r = await fetch(`${BUNGEE_BASE}/quote`, {
-      method: "POST",
+    console.log("Quote request params:", req.query);
+    
+    // Build query string from frontend parameters
+    const params = new URLSearchParams(req.query);
+    const url = `${BUNGEE_BASE}/api/v1/bungee/quote?${params.toString()}`;
+    
+    console.log("Forwarding to Bungee:", url);
+    
+    const r = await fetch(url, {
+      method: "GET",
       headers: BUNGEE_HEADERS,
-      body: JSON.stringify(req.body),
     });
+    
     const data = await r.json();
+    
+    console.log("Bungee response:", data.success ? "Success" : `Failed: ${data.message}`);
+    
+    if (!r.ok) {
+      return res.status(r.status).json(data);
+    }
+    
     res.json(data);
   } catch (e) {
     console.error("Bungee quote error:", e);
-    res.status(500).json({ error: "Bungee quote failed" });
+    res.status(500).json({ error: "Bungee quote failed", details: e.message });
   }
 });
 
-// Build transaction
-app.post("/api/bungee/build-tx", async (req, res) => {
+// FIX: Build transaction - Forward query parameters!
+app.get("/api/bungee/build-tx", async (req, res) => {
   try {
-    const r = await fetch(`${BUNGEE_BASE}/build-tx`, {
-      method: "POST",
+    console.log("Build tx request params:", req.query);
+    
+    // Build query string from frontend parameters
+    const params = new URLSearchParams(req.query);
+    const url = `${BUNGEE_BASE}/api/v1/bungee/build-tx?${params.toString()}`;
+    
+    console.log("Forwarding to Bungee:", url);
+    
+    const r = await fetch(url, {
+      method: "GET",
       headers: BUNGEE_HEADERS,
-      body: JSON.stringify(req.body),
     });
+    
     const data = await r.json();
+    
+    console.log("Bungee build tx response:", data.success ? "Success" : `Failed: ${data.message}`);
+    
+    if (!r.ok) {
+      return res.status(r.status).json(data);
+    }
+    
+    // FIX: Don't extract Mantle tokens here, return full response
     res.json(data);
   } catch (e) {
     console.error("Bungee build tx error:", e);
-    res.status(500).json({ error: "Bungee build tx failed" });
+    res.status(500).json({ error: "Bungee build tx failed", details: e.message });
   }
 });
 

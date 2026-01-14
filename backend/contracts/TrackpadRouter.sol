@@ -3,14 +3,14 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; // Import interface instead of redefining it
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol"; 
 
 contract TrackpadCrossChainRouter is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     address public owner;
     address public feeRecipient;
-    uint256 public constant FEE_BPS = 10; // 0.1%
+    uint256 public constant FEE_BPS = 10; 
 
     mapping(address => bool) public allowedGateway;
 
@@ -76,7 +76,7 @@ contract TrackpadCrossChainRouter is ReentrancyGuard {
         }
 
         if (usedNative) {
-            // Native flow: forward value
+            
         } else {
             IERC20(_tokenIn).forceApprove(_gateway, amountAfterFee); 
         }
