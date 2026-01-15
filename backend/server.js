@@ -65,11 +65,6 @@ app.get("/api/cmc-history", async (req, res) => {
   }
 });
 
-// ================================
-// BUNGEE / SOCKET BACKEND ROUTES
-// ================================
-
-// CORRECTED BUNGEE BACKEND ENDPOINTS
 
 const BUNGEE_BASE = "https://dedicated-backend.bungee.exchange";
 
@@ -79,7 +74,6 @@ const BUNGEE_HEADERS = {
   "Content-Type": "application/json",
 };
 
-// Supported chains
 app.get("/api/bungee/supported-chains", async (req, res) => {
   try {
     const r = await fetch(`${BUNGEE_BASE}/api/v1/supported-chains`, {
@@ -93,7 +87,6 @@ app.get("/api/bungee/supported-chains", async (req, res) => {
   }
 });
 
-// Token list
 app.get("/api/bungee/tokens", async (req, res) => {
   try {
     const r = await fetch(`${BUNGEE_BASE}/api/v1/tokens/list`, {
@@ -112,12 +105,10 @@ app.get("/api/bungee/tokens", async (req, res) => {
   }
 });
 
-// FIX: Quote endpoint - Forward query parameters!
 app.get("/api/bungee/quote", async (req, res) => {
   try {
     console.log("Quote request params:", req.query);
-    
-    // Build query string from frontend parameters
+  
     const params = new URLSearchParams(req.query);
     const url = `${BUNGEE_BASE}/api/v1/bungee/quote?${params.toString()}`;
     
@@ -143,12 +134,10 @@ app.get("/api/bungee/quote", async (req, res) => {
   }
 });
 
-// FIX: Build transaction - Forward query parameters!
 app.get("/api/bungee/build-tx", async (req, res) => {
   try {
     console.log("Build tx request params:", req.query);
     
-    // Build query string from frontend parameters
     const params = new URLSearchParams(req.query);
     const url = `${BUNGEE_BASE}/api/v1/bungee/build-tx?${params.toString()}`;
     
@@ -166,8 +155,6 @@ app.get("/api/bungee/build-tx", async (req, res) => {
     if (!r.ok) {
       return res.status(r.status).json(data);
     }
-    
-    // FIX: Don't extract Mantle tokens here, return full response
     res.json(data);
   } catch (e) {
     console.error("Bungee build tx error:", e);

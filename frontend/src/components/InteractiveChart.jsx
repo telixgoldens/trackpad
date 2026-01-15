@@ -64,7 +64,6 @@ const InteractiveChart = ({ symbol, type }) => {
     };
   }, [symbol, range]);
 useEffect(() => {
-    // Debug: expose chart state to console for UX troubleshooting
     console.debug("InteractiveChart state:", { symbol, loading, data });
   }, [symbol, loading, data]);
 
@@ -118,7 +117,6 @@ useEffect(() => {
           <XAxis
             dataKey="date"
             tickFormatter={(v) => {
-              // Accepts DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD
               if (typeof v === 'string' && v.includes('/')) {
                 const [d, m, y] = v.split('/');
                 if (d.length === 2 && m.length === 2 && y.length === 4) {

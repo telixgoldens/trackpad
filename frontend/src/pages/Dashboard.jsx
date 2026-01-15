@@ -53,6 +53,10 @@ const Dashboard = () => {
   const [swapError, setSwapError] = useState("");
   const [fromTokenBalance, setFromTokenBalance] = useState("0");
   const [toTokenBalance, setToTokenBalance] = useState("0");
+  const [fromTokenDecimals, setFromTokenDecimals] = useState(18);
+  const [toTokenDecimals, setToTokenDecimals] = useState(18);
+  const [isApproving, setIsApproving] = useState(false);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -172,6 +176,20 @@ const Dashboard = () => {
           );
           setFromTokenBalance(fromBalance);
           setToTokenBalance(toBalance);
+
+          const fromDecimals = await Web3Service.getTokenDecimals(
+            selectedFromToken
+          );
+          const toDecimals = await Web3Service.getTokenDecimals(
+            selectedToToken
+          );
+          setFromTokenDecimals(fromDecimals);
+          setToTokenDecimals(toDecimals);
+
+          console.log("Token info:", {
+            from: { balance: fromBalance, decimals: fromDecimals },
+            to: { balance: toBalance, decimals: toDecimals },
+          });
         } catch (error) {
           console.error("Error fetching balances:", error);
         }
@@ -235,60 +253,176 @@ const Dashboard = () => {
     }
   };
 
-  const handleSwap = async () => {
-    setSwapError("");
+ const handleApprove = async () => {
+  if (!walletConnected || !walletAddress) {
+    setSwapError("Please connect wallet first");
+    return;
+  }
 
-    if (!walletConnected) {
-      return setModalContent(<p className="p-4">Connect wallet first.</p>);
+  if (!swapAmount || parseFloat(swapAmount) <= 0) {
+    setSwapError("Please enter a valid amount");
+    return;
+  }
+
+  setIsApproving(true);
+  setSwapError("");
+
+  try {
+    // For ERC20 tokens, we need to get the spender address from a quote
+    console.log("Getting quote to find spender address...");
+    
+    const quoteParams = new URLSearchParams({
+      originChainId: 5000,
+      destinationChainId: 5000,
+      inputToken: selectedFromToken,
+      outputToken: selectedToToken,
+      inputAmount: (parseFloat(swapAmount) * Math.pow(10, fromTokenDecimals)).toString(),
+      userAddress: walletAddress,
+      receiverAddress: walletAddress,
+      slippage: 0.5,
+      refuel: false,
+      enableManual: true,  // FIX: Enable manual routes
+      enableMultipleAutoRoutes: false  // FIX: Enable auto routes
+    });
+
+    const quoteRes = await fetch(`http://localhost:3001/api/bungee/quote?${quoteParams}`);
+    if (!quoteRes.ok) {
+      const errorData = await quoteRes.json().catch(() => ({}));
+      console.error("Quote error:", errorData);
+      throw new Error(errorData.message || "Failed to get quote");
+    }
+
+    const quote = await quoteRes.json();
+    console.log("Quote response:", quote);
+
+    if (!quote.success || !quote.result) {
+      throw new Error(quote.message || "Invalid quote response");
+    }
+
+    const route = quote.result?.autoRoute || quote.result?.manualRoutes?.[0];
+
+    if (!route) {
+      console.error("No route in quote result:", quote.result);
+      throw new Error("No route available for this token pair");
+    }
+
+    console.log("Route obtained:", route.quoteId || route.requestHash);
+
+    // Build tx to get spender address
+    const buildParams = new URLSearchParams({ userAddress: walletAddress });
+    if (route.quoteId) buildParams.append('quoteId', route.quoteId);
+    else if (route.requestHash) buildParams.append('requestHash', route.requestHash);
+
+    const buildRes = await fetch(`http://localhost:3001/api/bungee/build-tx?${buildParams}`);
+    if (!buildRes.ok) {
+      throw new Error("Failed to get approval details");
+    }
+
+    const buildData = await buildRes.json();
+
+    if (buildData?.result?.approvalData) {
+      const approvalData = buildData.result.approvalData;
+      console.log("Approval data from Bungee:", approvalData);
+
+      // Build approval transaction - try Bungee's data first
+      let approvalTxData;
+      let approvalTarget;
+      let approvalValue = "0x0";
+      let approvalGas;
+
+      if (approvalData.data) {
+        // Bungee provided pre-built data
+        approvalTxData = approvalData.data;
+        approvalTarget = approvalData.to || approvalData.tokenAddress;
+        approvalValue = approvalData.value || "0x0";
+        approvalGas = approvalData.gas || approvalData.gasLimit;
+      } else if (approvalData.spenderAddress && approvalData.amount) {
+        // Build it ourselves
+        const spenderPadded = approvalData.spenderAddress.toLowerCase().replace('0x', '').padStart(64, '0');
+        const maxUint256 = 'f'.repeat(64);
+        approvalTxData = '0x095ea7b3' + spenderPadded + maxUint256;
+        approvalTarget = approvalData.tokenAddress || selectedFromToken;
+      } else {
+        throw new Error("Cannot build approval transaction");
+      }
+
+      console.log("Approving token for spender:", approvalData.spenderAddress);
+      console.log("Approval target:", approvalTarget);
+      console.log("Approval data:", approvalTxData);
+
+      // Build tx params
+      const txParams = {
+        from: walletAddress,
+        to: approvalTarget,
+        data: approvalTxData,
+        value: approvalValue
+      };
+
+      // Add gas if Bungee provided it
+      if (approvalGas) {
+        // Convert to hex if needed
+        if (typeof approvalGas === 'number' || (typeof approvalGas === 'string' && !approvalGas.startsWith('0x'))) {
+          txParams.gas = '0x' + parseInt(approvalGas).toString(16);
+        } else {
+          txParams.gas = approvalGas;
+        }
+        console.log("Using gas limit:", txParams.gas);
+      } else {
+        console.log("No gas limit - MetaMask will estimate");
+      }
+
+      // Send approval via our service
+      const result = await Web3Service.approveTokenDirect(txParams);
+      
+      setSwapError("");
+      alert("Token approved! You can now execute the swap.");
+    } else {
+      setSwapError("Approval not needed or already approved");
+    }
+  } catch (error) {
+    console.error("Approval error:", error);
+    setSwapError(error.message || "Approval failed");
+  } finally {
+    setIsApproving(false);
+  }
+};
+
+
+
+  const handleSwap = async () => {
+    if (!walletConnected || !walletAddress) {
+      setSwapError("Please connect wallet first");
+      return;
     }
 
     if (!swapAmount || parseFloat(swapAmount) <= 0) {
-      setSwapError("Enter a valid amount...");
-      return setModalContent(<p className="p-4">Enter a valid amount....</p>);
+      setSwapError("Please enter a valid amount");
+      return;
     }
 
-    if (!selectedFromToken || !selectedToToken) {
-      setSwapError("Please select both tokens");
-      return setModalContent(<p className="p-4">Please select both tokens.</p>);
-    }
+    setIsSwapping(true);
+    setSwapError("");
 
-    if (selectedFromToken === selectedToToken) {
-      setSwapError("Cannot swap same token");
-      return setModalContent(
-        <p className="p-4">Cannot swap the same token.</p>
-      );
-    }
-
-    setModalContent(<p className="p-4">Initiating Swap...</p>);
     try {
-      const decimals = 18; // MNT has 18 decimals
-      const amountInSmallestUnit = (
-        parseFloat(swapAmount) * Math.pow(10, decimals)
-      ).toFixed(0);
-      console.log("Swap params:", {
+      const result = await Web3Service.executeSwapOnly({
         fromToken: selectedFromToken,
         toToken: selectedToToken,
-        amount: amountInSmallestUnit,
-        amountReadable: swapAmount,
-        decimals: decimals,
-        userAddress: walletAddress,
-      });
-      const receipt = await Web3Service.executeSwap({
-        fromToken: selectedFromToken,
-        toToken: selectedToToken,
-        amount: amountInSmallestUnit,
+        amount: (
+          parseFloat(swapAmount) * Math.pow(10, fromTokenDecimals)
+        ).toString(),
         userAddress: walletAddress,
         slippage: 0.5,
       });
-      setModalContent(
-        <div className="p-4">
-          <h3 className="text-xl font-bold text-green-500">Success</h3>
-          <p>TX: {receipt.txHash}</p>
-          <p>Fee: {receipt.feePaid}</p>
-        </div>
-      );
-    } catch (e) {
-      setModalContent(<p className="p-4">Swap Failed: {e.message}</p>);
+
+      console.log("Swap successful:", result);
+      setSwapAmount("");
+      setSwapError("");
+      alert("Swap successful! TX: " + result.txHash);
+    } catch (error) {
+      console.error("Swap failed:", error);
+      setSwapError(error.message || "Swap failed");
+    } finally {
+      setIsSwapping(false);
     }
   };
 
@@ -377,7 +511,6 @@ const Dashboard = () => {
     const crypt = portfolio
       .filter((i) => i.type === "crypto")
       .reduce((sum, item) => sum + item.quantity * (item.price || 0), 0);
-    // FIX: Ensuring metrics is never undefined for .toLocaleString
     return {
       total: total || 0,
       pnl: pnl || 0,
@@ -601,12 +734,16 @@ const Dashboard = () => {
               </div>
             )}
             <div className="bg-black/40 p-6 rounded-[30px] border border-white/5">
-               <div className="flex justify-between items-center mb-3">
+              <div className="flex justify-between items-center mb-3">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
                   From Asset
                 </label>
                 <span className="text-[10px] font-black text-gray-400">
-                  Balance: {(parseInt(fromTokenBalance, 16) / 1e18).toFixed(4)}
+                  Balance:{" "}
+                  {(
+                    parseInt(fromTokenBalance, 16) /
+                    Math.pow(10, fromTokenDecimals)
+                  ).toFixed(4)}
                 </span>
               </div>
               <div className="flex items-center">
@@ -650,7 +787,6 @@ const Dashboard = () => {
                 }}
                 className="bg-yellow-500 p-4 rounded-full hover:scale-110 cursor-pointer"
               >
-                {/* New swap arrows icon */}
                 <svg>
                   <path d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                 </svg>
@@ -662,7 +798,10 @@ const Dashboard = () => {
                   To Asset
                 </label>
                 <span className="text-[10px] font-black text-gray-400">
-                  Balance: {(parseInt(toTokenBalance, 16) / 1e18).toFixed(4)}
+                  Balance:{" "}
+                  {(
+                    parseInt(toTokenBalance, 16) / Math.pow(10, toTokenDecimals)
+                  ).toFixed(4)}
                 </span>
               </div>
               <div className="flex items-center">
@@ -690,12 +829,55 @@ const Dashboard = () => {
                 </p>
               </div>
             </div>
-            <button
-              onClick={handleSwap}
-              className="w-full py-7 bg-blue-600 text-white font-black rounded-3xl text-xl hover:scale-[1.02] transition shadow-lg shadow-blue-600/30 uppercase italic tracking-tighter"
-            >
-              Execute Order
-            </button>
+            {swapError && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-[20px] p-4 mb-4">
+                <p className="text-red-400 text-sm">{swapError}</p>
+              </div>
+            )}
+
+            {/* Check if token is native (MNT) */}
+            {selectedFromToken.toLowerCase() ===
+            "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" ? (
+              // Native token - only show swap button
+              <button
+                onClick={handleSwap}
+                disabled={isSwapping || !walletConnected}
+                className={`w-full py-4 ${
+                  isSwapping || !walletConnected
+                    ? "bg-gray-600 opacity-50"
+                    : "bg-blue-600 hover:bg-blue-700"
+                } text-white font-black rounded-[25px] transition-all duration-300 transform hover:scale-105`}
+              >
+                {isSwapping ? "SWAPPING..." : "EXECUTE SWAP"}
+              </button>
+            ) : (
+              // ERC20 token - show both approve and swap buttons
+              <div className="space-y-3">
+                <button
+                  onClick={handleApprove}
+                  disabled={isApproving || !walletConnected}
+                  className={`w-full py-4 ${
+                    isApproving || !walletConnected
+                      ? "bg-yellow-600 opacity-50"
+                      : "bg-yellow-500 hover:bg-yellow-600"
+                  } text-black font-black rounded-[25px] transition-all duration-300 transform hover:scale-105`}
+                >
+                  {isApproving ? "APPROVING..." : "1. APPROVE TOKEN"}
+                </button>
+
+                <button
+                  onClick={handleSwap}
+                  disabled={isSwapping || !walletConnected}
+                  className={`w-full py-4 ${
+                    isSwapping || !walletConnected
+                      ? "bg-gray-600 opacity-50"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  } text-white font-black rounded-[25px] transition-all duration-300 transform hover:scale-105`}
+                >
+                  {isSwapping ? "SWAPPING..." : "2. EXECUTE SWAP"}
+                </button>
+              </div>
+            )}
             <p className="text-center text-[10px] font-black text-gray-600 uppercase tracking-widest mt-4">
               Routed via Bungee • 0.1% Trackpad Fee
             </p>

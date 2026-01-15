@@ -15,7 +15,7 @@ const Footer = () => {
           <img src={ivm} alt="ivm-pic" />
           <p className="sub">
             Subscribe to our newsletter to be one of the first to receive
-            updates on Innoson Group
+            updates on Trackpad
           </p>
           <h5>Newsletter Sign Up</h5>
           <input type="email" placeholder="Email Address" name="" id="mail" />
@@ -23,28 +23,20 @@ const Footer = () => {
             Email Address
           </label>
         </div>
-        <div className="col-lg-3">
-          <h5>Address</h5>
-          <h6>Head Office</h6>
-          <p>No 95 Owerri Road,P.O. Box 1068, Umudim, Nnewi,Anambra State</p>
-          <h6>Lagos Office</h6>
-          <p>
-            Plot 1 Block A,Amuwo Odofin Ind. Estate,Oshodi, Apapa,Lagos State
-          </p>
-        </div>
+       
         <div className="col-lg-3">
             <h5>Contact</h5>
           <div className="d-flex">
             <img src={facebook} alt="facebook" />
-            <p>@innosongroup</p>
+            <p>@trackpad</p>
           </div>
           <div className="d-flex">
             <img src={instagram} alt="instagram" />
-            <p>@innosongroup</p>
+            <p>@trackpad</p>
           </div>
           <div className="d-flex">
             <img src={gmail} alt="gmail" />
-            <p>sales@innosongroup.com</p>
+            <p>hr@goldensblockchain.xyz</p>
           </div>
         </div>
         <hr/>

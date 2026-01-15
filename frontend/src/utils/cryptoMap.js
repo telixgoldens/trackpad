@@ -26,8 +26,6 @@ export const CMC_IDS = {
   TRON: 1958,
   LINK: 1975,
   CHAINLINK: 1975,
-  
-  
   UNI: 7083,
   UNISWAP: 7083,
   AAVE: 7278,
@@ -42,8 +40,6 @@ export const CMC_IDS = {
   SUSHI: 6758,
   SUSHISWAP: 6758,
   YFI: 5864,
-  
-  // Layer 2 / Scaling
   ARB: 11841,
   ARBITRUM: 11841,
   OP: 11840,
@@ -54,28 +50,20 @@ export const CMC_IDS = {
   LOOPRING: 1934,
   MNT: 27075,
   MANTLE: 27075,
-  
-  // Meme Coins
   SHIB: 5994,
   SHIBAINU: 5994,
   PEPE: 24478,
   FLOKI: 10804,
-  
-  // Stablecoins
   DAI: 4943,
   BUSD: 4687,
   TUSD: 2563,
   USDD: 19891,
   FRAX: 6952,
-  
-  // Exchange Tokens
   FTT: 4195,
   CRO: 3635,
   CRYPTO: 3635,
   OKB: 3897,
   LEO: 3957,
-  
-  // Gaming / Metaverse
   SAND: 6210,
   SANDBOX: 6210,
   MANA: 1966,
@@ -85,8 +73,6 @@ export const CMC_IDS = {
   GALA: 7080,
   ENJ: 2130,
   ENJIN: 2130,
-  
-  // Web3 / Infrastructure
   FIL: 2280,
   FILECOIN: 2280,
   GRT: 6719,
@@ -97,15 +83,11 @@ export const CMC_IDS = {
   APT: 21794,
   APTOS: 21794,
   SUI: 20947,
-  
-  // Privacy Coins
   XMR: 328,
   MONERO: 328,
   ZEC: 1437,
   ZCASH: 1437,
   DASH: 131,
-  
-  // Other Popular
   LTC: 2,
   LITECOIN: 2,
   ETC: 1321,
@@ -134,27 +116,19 @@ export const CMC_IDS = {
   EGLD: 6892,
   ELROND: 6892,
   MINA: 8646,
-  
-  // AI / Data
   FET: 3773,
   FETCH: 3773,
   OCEAN: 3911,
   RNDR: 5690,
   RENDER: 5690,
   AGIX: 2424,
-  
-  // Real World Assets
   ONDO: 22202,
   RWA: 22202,
-  
-  // Base Ecosystem
   BRETT: 29743,
   DEGEN: 30125,
   
-  // Add more as needed
 };
 
-// Reverse mapping: ID to Symbol
 export const CMC_SYMBOLS = Object.entries(CMC_IDS).reduce((acc, [symbol, id]) => {
   if (!acc[id]) {
     acc[id] = symbol;
@@ -162,7 +136,6 @@ export const CMC_SYMBOLS = Object.entries(CMC_IDS).reduce((acc, [symbol, id]) =>
   return acc;
 }, {});
 
-// Helper function to get CMC ID from symbol
 export const getCmcId = (symbol) => {
   if (!symbol) return null;
   
@@ -170,12 +143,10 @@ export const getCmcId = (symbol) => {
   return CMC_IDS[upperSymbol] || null;
 };
 
-// Helper function to get symbol from CMC ID
 export const getSymbolFromCmcId = (id) => {
   return CMC_SYMBOLS[id] || null;
 };
 
-// Validate if a symbol has a CMC ID
 export const hasCmcId = (symbol) => {
   const upperSymbol = String(symbol).toUpperCase();
   return upperSymbol in CMC_IDS;

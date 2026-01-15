@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional: Scrollbar styling for the dark theme */
 ::-webkit-scrollbar {
   width: 8px;
 }

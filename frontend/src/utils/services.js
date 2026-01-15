@@ -9,12 +9,11 @@ export const Web3Service = {
       method: "eth_requestAccounts",
     });
 
-    // Check network
     const currentChainId = await window.ethereum.request({
       method: "eth_chainId",
     });
 
-    // If not Mantle (0x1388), switch
+    // Mantle Check (0x1388 / 5000)
     if (currentChainId !== "0x1388") {
       try {
         await window.ethereum.request({
@@ -22,7 +21,6 @@ export const Web3Service = {
           params: [{ chainId: "0x1388" }],
         });
       } catch (switchError) {
-        // If Mantle not in wallet, add it
         if (switchError.code === 4902) {
           await window.ethereum.request({
             method: "wallet_addEthereumChain",
@@ -45,32 +43,72 @@ export const Web3Service = {
 
   getTokenBalance: async (tokenAddress, userAddress) => {
     if (!window.ethereum) return "0";
-    
+
     try {
-      // If native token (MNT)
-      if (tokenAddress.toLowerCase() === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") {
+      if (
+        tokenAddress.toLowerCase() ===
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      ) {
         const balance = await window.ethereum.request({
-          method: 'eth_getBalance',
-          params: [userAddress, 'latest']
+          method: "eth_getBalance",
+          params: [userAddress, "latest"],
         });
         return balance;
       }
-      
-      // For ERC20 tokens
-      const balanceOfData = "0x70a08231" + userAddress.slice(2).padStart(64, '0');
-      
+
+      const balanceOfData =
+        "0x70a08231" + userAddress.slice(2).padStart(64, "0");
+
       const balance = await window.ethereum.request({
-        method: 'eth_call',
-        params: [{
-          to: tokenAddress,
-          data: balanceOfData
-        }, 'latest']
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: balanceOfData,
+          },
+          "latest",
+        ],
       });
-      
+
       return balance || "0x0";
     } catch (error) {
       console.error("Error fetching balance:", error);
       return "0x0";
+    }
+  },
+
+  getTokenDecimals: async (tokenAddress) => {
+    if (!window.ethereum) return 18;
+
+    try {
+      if (
+        tokenAddress.toLowerCase() ===
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      ) {
+        return 18;
+      }
+
+      const decimalsData = "0x313ce567";
+
+      const result = await window.ethereum.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: decimalsData,
+          },
+          "latest",
+        ],
+      });
+
+      if (result && result !== "0x") {
+        return parseInt(result, 16);
+      }
+
+      return 18;
+    } catch (error) {
+      console.error("Error fetching decimals:", error);
+      return 18;
     }
   },
 
@@ -95,28 +133,16 @@ export const Web3Service = {
     };
     const [eth, mantle] = await Promise.all([
       fetchGas(CONTRACT_CONFIG.ethereum.rpc),
-      // fetchGas(CONTRACT_CONFIG.base.rpc),
       fetchGas(CONTRACT_CONFIG.mantle.rpc),
     ]);
     return { ethereum: eth, mantle };
   },
-  getBungeeChains: async () => {
-    try {
-      const res = await fetch(
-        "http://localhost:3001/api/bungee/supported-chains"
-      );
-      return await res.json();
-    } catch (e) {
-      console.error("Bungee chains error:", e);
-      return [];
-    }
-  },
+
   getBungeeTokens: async () => {
     try {
       const res = await fetch("http://localhost:3001/api/bungee/tokens");
       if (res.ok) {
         const data = await res.json();
-
         let tokens = [];
 
         if (data && typeof data === "object") {
@@ -132,62 +158,14 @@ export const Web3Service = {
         }
 
         if (Array.isArray(tokens) && tokens.length > 0) {
-          console.log(`Loaded ${tokens.length} tokens from backend`);
           return tokens;
         }
-
-        console.warn("No tokens found in backend response, using mock tokens");
         return MOCK_TOKENS;
       }
-
-      console.warn("Backend returned non-OK status, using mock tokens");
       return MOCK_TOKENS;
     } catch (e) {
-      console.warn("Bungee tokens fetch failed, using mock tokens:", e.message);
+      console.warn("Bungee tokens fetch failed:", e.message);
       return MOCK_TOKENS;
-    }
-  },
-
-  getBungeeQuote: async (payload) => {
-    try {
-      // Convert payload to query string for GET request
-      const params = new URLSearchParams();
-      Object.keys(payload).forEach((key) => {
-        if (payload[key] !== undefined && payload[key] !== null) {
-          params.append(key, payload[key]);
-        }
-      });
-
-      const res = await fetch(
-        `http://localhost:3001/api/bungee/quote?${params.toString()}`
-      );
-      return await res.json();
-    } catch (e) {
-      console.error("Bungee quote error:", e);
-      return null;
-    }
-  },
-
-  buildBungeeTx: async (payload) => {
-    try {
-      // Convert payload to query string for GET request
-      const params = new URLSearchParams();
-
-      // Route needs to be stringified for URL
-      if (payload.route) {
-        params.append("route", JSON.stringify(payload.route));
-      }
-      if (payload.userAddress) {
-        params.append("userAddress", payload.userAddress);
-      }
-
-      const res = await fetch(
-        `http://localhost:3001/api/bungee/build-tx?${params.toString()}`
-      );
-      return await res.json();
-    } catch (e) {
-      console.error("Bungee build tx error:", e);
-      return null;
     }
   },
 
@@ -221,7 +199,167 @@ export const Web3Service = {
     }
   },
 
-  executeSwap: async ({
+  // 1. Check if token needs approval
+  checkTokenApproval: async ({
+    tokenAddress,
+    spenderAddress,
+    amount,
+    userAddress,
+  }) => {
+    if (!window.ethereum) throw new Error("Wallet not connected");
+
+    try {
+      // Native token (MNT) never needs approval
+      if (
+        tokenAddress.toLowerCase() ===
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+      ) {
+        return { needsApproval: false, currentAllowance: "0" };
+      }
+
+      const ownerPadded = userAddress.slice(2).padStart(64, "0");
+      const spenderPadded = spenderAddress.slice(2).padStart(64, "0");
+      const allowanceData = "0xdd62ed3e" + ownerPadded + spenderPadded;
+
+      const allowance = await window.ethereum.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: allowanceData,
+          },
+          "latest",
+        ],
+      });
+
+      const currentAllowance = BigInt(allowance || "0x0");
+      const requiredAmount = BigInt(amount);
+
+      console.log("Allowance check:", {
+        token: tokenAddress,
+        current: currentAllowance.toString(),
+        required: requiredAmount.toString(),
+        needsApproval: currentAllowance < requiredAmount,
+      });
+
+      return {
+        needsApproval: currentAllowance < requiredAmount,
+        currentAllowance: currentAllowance.toString(),
+      };
+    } catch (error) {
+      console.error("Error checking approval:", error);
+      // If we can't check, assume approval needed for safety
+      return { needsApproval: true, currentAllowance: "0" };
+    }
+  },
+
+  // 2. Approve token (separate from swap)
+  approveToken: async ({ tokenAddress, spenderAddress, userAddress }) => {
+    if (!window.ethereum) throw new Error("Wallet not connected");
+
+    try {
+      console.log("Approving token...", {
+        tokenAddress,
+        spenderAddress,
+      });
+
+      const spenderPadded = spenderAddress
+        .toLowerCase()
+        .replace("0x", "")
+        .padStart(64, "0");
+
+      // Use max uint256 for unlimited approval
+      const maxUint256 = "f".repeat(64);
+      const approvalData = "0x095ea7b3" + spenderPadded + maxUint256;
+
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            from: userAddress,
+            to: tokenAddress,
+            data: approvalData,
+            value: "0x0",
+          },
+        ],
+      });
+
+      console.log("Approval transaction sent:", txHash);
+
+      // Wait for confirmation
+      console.log("Waiting for approval confirmation...");
+      for (let i = 0; i < 45; i++) {
+        const receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+
+        if (receipt?.blockNumber) {
+          console.log(
+            "✓ Approval confirmed in block:",
+            parseInt(receipt.blockNumber, 16)
+          );
+          return { success: true, txHash };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      return { success: true, txHash };
+    } catch (error) {
+      console.error("Approval error:", error);
+      if (error.code === 4001) {
+        throw new Error("Approval rejected by user");
+      }
+      throw error;
+    }
+  },
+
+  // 3. Approve token direct (using pre-built params)
+  approveTokenDirect: async (txParams) => {
+    if (!window.ethereum) throw new Error("Wallet not connected");
+
+    try {
+      console.log("Sending approval transaction:", txParams);
+
+      const txHash = await window.ethereum.request({
+        method: "eth_sendTransaction",
+        params: [txParams],
+      });
+
+      console.log("Approval transaction sent:", txHash);
+
+      // Wait for confirmation
+      console.log("Waiting for approval confirmation...");
+      for (let i = 0; i < 45; i++) {
+        const receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        });
+
+        if (receipt?.blockNumber) {
+          console.log(
+            "✓ Approval confirmed in block:",
+            parseInt(receipt.blockNumber, 16)
+          );
+          return { success: true, txHash };
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      return { success: true, txHash };
+    } catch (error) {
+      console.error("Approval error:", error);
+      if (error.code === 4001) {
+        throw new Error("Approval rejected by user");
+      }
+      throw error;
+    }
+  },
+
+  // 4. Execute swap only (assumes approval already done)
+  executeSwapOnly: async ({
     fromToken,
     toToken,
     amount,
@@ -230,13 +368,20 @@ export const Web3Service = {
   }) => {
     if (!window.ethereum) throw new Error("Wallet not connected");
 
-    // Mantle mainnet chainId
     const MANTLE_CHAIN_ID = 5000;
+    const MANTLE_CHAIN_ID_HEX = "0x1388";
 
     try {
-      // 1. Get quote using GET with query parameters
-      console.log("Getting swap quote...");
+      // Check network
+      const currentChainId = await window.ethereum.request({
+        method: "eth_chainId",
+      });
+      if (currentChainId !== MANTLE_CHAIN_ID_HEX) {
+        throw new Error("Please switch to Mantle network");
+      }
 
+      // Get FRESH quote immediately before building
+      console.log("Getting fresh quote for swap...");
       const quoteParams = new URLSearchParams({
         originChainId: MANTLE_CHAIN_ID,
         destinationChainId: MANTLE_CHAIN_ID,
@@ -246,261 +391,92 @@ export const Web3Service = {
         userAddress: userAddress,
         receiverAddress: userAddress,
         slippage: slippage,
-        refuel: false,
         enableManual: true,
-        enableMultipleAutoRoutes: false,
       });
 
-      const quoteUrl = `http://localhost:3001/api/bungee/quote?${quoteParams.toString()}`;
-      console.log("Quote URL:", quoteUrl);
-
-      const quoteResponse = await fetch(quoteUrl);
-
-      if (!quoteResponse.ok) {
-        const errorData = await quoteResponse.json();
-        console.error("Quote error response:", errorData);
-        throw new Error(
-          `Quote request failed: ${errorData.message || quoteResponse.status}`
-        );
-      }
-
-      const quote = await quoteResponse.json();
-
-      console.log("Full quote response:", quote);
-
-      if (!quote?.success || !quote?.result) {
-        console.error("Quote has no result field:", quote);
-        throw new Error(quote?.message || "Invalid quote response from Bungee");
-      }
-
-      const result = quote.result;
-      let selectedRoute = null;
-
-      if (result.autoRoute) {
-        console.log("Using auto route");
-        selectedRoute = result.autoRoute;
-      } else if (result.manualRoutes && result.manualRoutes.length > 0) {
-        console.log(
-          `Using manual route (${result.manualRoutes.length} available)`
-        );
-        selectedRoute = result.manualRoutes[0];
-      }
-
-      if (!selectedRoute) {
-        console.error("No routes found. Quote result:", result);
-        throw new Error(
-          "No swap routes available. Try a different amount or token pair."
-        );
-      }
-
-      console.log("Selected route:", selectedRoute);
-
-      // 2. Build transaction using GET with query parameters
-      console.log("Building transaction...");
-
-      const quoteId = selectedRoute.quoteId;
-      console.log("Quote ID:", quoteId);
-      console.log("Quote Expiry:", selectedRoute.quoteExpiry ? new Date(selectedRoute.quoteExpiry * 1000).toISOString() : "No expiry");
-      
-      if (!quoteId) {
-        console.error("Route missing quoteId:", selectedRoute);
-        throw new Error("Selected route does not have quoteId");
-      }
-      
-      // Check if quote is already expired
-      if (selectedRoute.quoteExpiry) {
-        const now = Math.floor(Date.now() / 1000);
-        const timeLeft = selectedRoute.quoteExpiry - now;
-        console.log("Quote expires in:", timeLeft, "seconds");
-        
-        if (timeLeft < 5) {
-          console.warn("Quote is about to expire! Getting new quote...");
-          // Get a fresh quote
-          const freshQuoteResponse = await fetch(quoteUrl);
-          if (!freshQuoteResponse.ok) {
-            throw new Error("Failed to get fresh quote");
-          }
-          const freshQuote = await freshQuoteResponse.json();
-          
-          // Select fresh route
-          if (freshQuote.result.autoRoute) {
-            selectedRoute = freshQuote.result.autoRoute;
-          } else if (freshQuote.result.manualRoutes && freshQuote.result.manualRoutes.length > 0) {
-            selectedRoute = freshQuote.result.manualRoutes[0];
-          }
-          
-          console.log("Fresh quote ID:", selectedRoute.quoteId);
-        }
-      }
-      
-      const buildTxParams = new URLSearchParams({
-        quoteId: quoteId,
-        userAddress: userAddress,
-      });
-
-      const txResponse = await fetch(
-        `http://localhost:3001/api/bungee/build-tx?${buildTxParams.toString()}`
+      const quoteRes = await fetch(
+        `http://localhost:3001/api/bungee/quote?${quoteParams}`
       );
+      if (!quoteRes.ok) throw new Error("Quote failed");
 
-      if (!txResponse.ok) {
-        const errorData = await txResponse.json();
-        console.error("Build tx error response:", errorData);
-        throw new Error(
-          `Build tx failed: ${errorData.message || txResponse.status}`
-        );
+      const quote = await quoteRes.json();
+      if (!quote?.success || !quote?.result) throw new Error("Invalid quote");
+
+      const route = quote.result.autoRoute || quote.result.manualRoutes?.[0];
+      if (!route) throw new Error("No route found");
+
+      const routeId = route.quoteId || route.requestHash;
+      console.log("Fresh Quote ID obtained:", routeId);
+
+      // Build transaction
+      console.log("Building transaction...");
+      const buildParams = new URLSearchParams({ userAddress });
+      if (route.quoteId) buildParams.append("quoteId", route.quoteId);
+      else if (route.requestHash)
+        buildParams.append("requestHash", route.requestHash);
+
+      const buildRes = await fetch(
+        `http://localhost:3001/api/bungee/build-tx?${buildParams}`
+      );
+      if (!buildRes.ok) {
+        const err = await buildRes.json();
+        throw new Error(err.message || "Build transaction failed");
       }
 
-      const txData = await txResponse.json();
+      const buildData = await buildRes.json();
+      const txData =
+        buildData.result?.userTxs?.[0] ||
+        buildData.result?.txData ||
+        buildData.result?.[0];
 
-      console.log("Transaction built:", txData);
+      if (!txData) throw new Error("No transaction data received");
 
-      let transactionData = null;
+      // Send swap transaction
+      console.log("Sending swap transaction...");
 
-      if (txData?.success && txData?.result) {
-        // Try different possible paths for transaction data
-        if (txData.result.txData) {
-          transactionData = txData.result.txData;
-        } else if (txData.result.userTxs && txData.result.userTxs[0]) {
-          transactionData = txData.result.userTxs[0];
-        } else if (txData.result[0]) {
-          transactionData = txData.result[0];
+      const isNative =
+        fromToken.toLowerCase() ===
+        "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+      let value = "0x0";
+
+      if (isNative && txData.value) {
+        if (txData.value.startsWith("0x")) {
+          value = txData.value;
         } else {
-          console.error(
-            "Cannot find transaction data in response:",
-            txData.result
-          );
-          throw new Error("Transaction data structure not recognized");
+          value = "0x" + BigInt(txData.value).toString(16);
         }
-      } else {
-        console.error("Invalid build tx response:", txData);
-        throw new Error(
-          txData?.message || "Transaction data not received from backend"
-        );
       }
 
-      console.log("Transaction data to send:", transactionData);
-
-       const isNativeTokenSwap = fromToken.toLowerCase() === "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-      
-
-     if (!isNativeTokenSwap && txData.result.approvalData) {
-        console.log("Token approval required!");
-        console.log("Approval data:", txData.result.approvalData);
-        
-        const approvalData = txData.result.approvalData;
-        
-        // Send approval transaction first
-        console.log("Requesting token approval...");
-        try {
-          const approvalTx = {
-            from: userAddress,
-            to: approvalData.to || approvalData.tokenAddress || fromToken,
-            data: approvalData.data,
-            value: "0x0"
-          };
-          
-          console.log("Approval transaction:", approvalTx);
-          const approvalTxHash = await window.ethereum.request({
-            method: "eth_sendTransaction",
-            params: [approvalTx]
-          });
-          
-          console.log("Approval transaction sent:", approvalTxHash);
-          console.log("Waiting for approval confirmation...");
-          
-          // Wait for approval to be mined
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          console.log("Approval confirmed, proceeding with swap...");
-        } catch (approvalError) {
-           console.error("Approval failed:", approvalError);
-          
-          // Check if user rejected
-          if (approvalError.code === 4001) {
-            throw new Error("Token approval rejected by user");
-          }
-          
-          // Check the error message
-          const errorMsg = approvalError.message || approvalError.toString();
-          console.error("Approval error details:", errorMsg);
-          throw new Error("Token approval failed: " + approvalError.message);
-        }
-      } else if (!isNativeTokenSwap) {
-        console.log("No approval data from Bungee, token might already be approved or approval built into swap");
-      }
-
-      // 3. Send transaction via MetaMask
-      console.log("Sending transaction to MetaMask...");
-
-      
-      console.log("=== TRANSACTION DEBUG ===");
-      console.log("Input amount entered:", amount, "wei");
-      console.log("Input amount readable:", parseInt(amount) / 1e18, "tokens");
-      console.log("\nTransaction data from Bungee:");
-      console.log("- to:", transactionData.to);
-      console.log("- value (from Bungee):", transactionData.value || "0");
-      
-      // FIX: Bungee returns value as decimal string, not hex!
-      let valueToSend = "0x0";
-      if (transactionData.value && transactionData.value !== "0" && transactionData.value !== "0x0") {
-        // Check if it's already hex (starts with 0x)
-        if (transactionData.value.startsWith("0x")) {
-          valueToSend = transactionData.value;
-        } else {
-          // Convert decimal string to hex
-          const valueDecimal = BigInt(transactionData.value);
-          valueToSend = "0x" + valueDecimal.toString(16);
-          console.log("- Converted value from decimal to hex:", transactionData.value, "→", valueToSend);
-        }
-        
-        const valueInTokens = parseInt(valueToSend, 16) / 1e18;
-        console.log("- value (tokens):", valueInTokens);
-      }
-      
-      console.log("- data:", transactionData.data ? transactionData.data.slice(0, 20) + "..." : "none");
-      console.log("=== END DEBUG ===\n");
-      
-   
-      // Build transaction parameters
-      const txParams = {
-        from: userAddress,
-        to: transactionData.to,
-        data: transactionData.data,
-        // Use converted hex value for native swaps, otherwise 0x0
-        value: isNativeTokenSwap ? valueToSend : "0x0"
-      };
-      
-      console.log("Final tx params to MetaMask:");
-      console.log("- from:", txParams.from);
-      console.log("- to:", txParams.to);
-      console.log("- value:", txParams.value);
-      console.log("- value (tokens):", parseInt(txParams.value, 16) / 1e18);
-      
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
-        params: [txParams]
+        params: [
+          {
+            from: userAddress,
+            to: txData.to,
+            data: txData.data,
+            value: value,
+          },
+        ],
       });
 
-      console.log("Transaction sent:", txHash);
+      console.log("✓ Swap successful:", txHash);
 
       return {
         success: true,
         txHash,
         chain: "Mantle",
-        routerUsed: transactionData.to
+        routerUsed: txData.to,
       };
     } catch (error) {
-      console.error("Swap execution error:", error);
+      console.error("Swap error:", error);
       throw error;
     }
-  }
+  },
 };
 
+// ... (fetchLivePrices, fetchHistoricalData, AIService, generateMockHistoricalData remain unchanged)
 export const fetchLivePrices = async (holdings) => {
   const prices = {};
-
-  // ⚠️ SECURE: Using process.env references for production security ⚠️
-  // Ensure you define these variables in your local .env file.
   const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY || "";
   const ALPHA_VANTAGE_KEY = import.meta.env.VITE_ALPHA_VANTAGE_API_KEY || "";
   const COINGECKO_KEY = import.meta.env.VITE_COINGECKO_API_KEY || "";
@@ -536,7 +512,6 @@ export const fetchLivePrices = async (holdings) => {
         const symbol = stock.symbol.toUpperCase();
         let priceData = null;
 
-        // A. Try Finnhub First
         if (FINNHUB_KEY && !priceData) {
           try {
             const res = await fetch(
@@ -549,11 +524,10 @@ export const fetchLivePrices = async (holdings) => {
               }
             }
           } catch (e) {
-            console.warn(`Finnhub failed for ${symbol}, trying fallback...`, e);
+            console.warn(`Finnhub failed for ${symbol}`, e);
           }
         }
 
-        // B. Try Alpha Vantage (Fallback)
         if (ALPHA_VANTAGE_KEY && !priceData) {
           try {
             const res = await fetch(
@@ -576,7 +550,6 @@ export const fetchLivePrices = async (holdings) => {
           }
         }
 
-        // C. Final Fallback: Realistic Mock Data (if no keys or both APIs fail)
         if (!priceData) {
           const mockPrice =
             stock.purchasePrice * (1 + (Math.random() * 0.05 - 0.02));
@@ -603,43 +576,39 @@ export const fetchHistoricalData = async (id, type, range = "1M") => {
   const days = ranges[range] || 30;
 
   if (type === "crypto") {
-    // Accept numeric CoinMarketCap id, ticker (e.g. 'ETH'), or name ('ethereum')
-    let id = null;
+    let lookupId = null;
     if (typeof id === "number" || /^[0-9]+$/.test(String(id))) {
-      id = String(id);
+      lookupId = String(id);
     } else {
       const code = String(id).toUpperCase();
-      if (CMC_IDS[code]) id = String(CMC_IDS[code]);
+      if (CMC_IDS[code]) lookupId = String(CMC_IDS[code]);
       else {
         const found = Object.keys(CMC_IDS).find(
           (k) => k.toLowerCase() === String(id).toLowerCase()
         );
-        if (found) id = String(CMC_IDS[found]);
+        if (found) lookupId = String(CMC_IDS[found]);
       }
     }
 
-    if (id) {
+    if (lookupId) {
       try {
         const res = await fetch(
-          `http://localhost:3001/api/cmc-history?id=${id}&count=${days}`
+          `http://localhost:3001/api/cmc-history?id=${lookupId}&count=${days}`
         );
         if (res.ok) return await res.json();
-        const err = await res.json().catch(() => ({}));
-        console.warn("CMC backend non-ok", res.status, err);
       } catch (e) {
         console.error("CMC backend error", e);
       }
     }
   }
 
-  // 2. Handling Stocks with Finnhub (using candles)
   if (type === "stock" && import.meta.env.VITE_FINNHUB_API_KEY) {
     try {
       const to = Math.floor(Date.now() / 1000);
       const from = to - 30 * 86400;
 
       const res = await fetch(
-        `https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=D&from=${from}&to=${to}&token=${process.env.VITE_FINNHUB_API_KEY}`
+        `https://finnhub.io/api/v1/stock/candle?symbol=${id}&resolution=D&from=${from}&to=${to}&token=${import.meta.env.VITE_FINNHUB_API_KEY}`
       );
 
       const json = await res.json();
@@ -654,7 +623,6 @@ export const fetchHistoricalData = async (id, type, range = "1M") => {
     }
   }
 
-  // 3. Fallback: Dynamic Realistic Mock Data (Ensures price action is visible in preview)
   console.warn("Using mock data for", id);
   return Array.from({ length: days }, (_, i) => ({
     date: new Date(Date.now() - (days - i) * 86400000).toLocaleDateString(),
@@ -662,7 +630,6 @@ export const fetchHistoricalData = async (id, type, range = "1M") => {
   }));
 };
 
-// --- AI Logic ---
 export const AIService = {
   fetchAssetAnalysis: async (assetName) => {
     const q = `Market insight report for ${assetName}...`;
@@ -676,9 +643,7 @@ export const AIService = {
         riskAssessment: lines[2] || "Risk assessment calculating...",
       };
     } catch (e) {
-      return {
-        /* error fallback */
-      };
+      return {};
     }
   },
   fetchDailyRecap: async () => {
@@ -717,7 +682,7 @@ export const AIService = {
     }
   },
   callGemini: async (userQuery) => {
-    const apiKey = import.meta.env.GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`;
     const payload = { contents: [{ parts: [{ text: userQuery }] }] };
     try {
@@ -734,7 +699,6 @@ export const AIService = {
   },
 };
 
-// --- Chart Helpers ---
 export const generateMockHistoricalData = (assetSymbol, currentPrice) => {
   const basePrice = currentPrice || 100;
   let data = [];
