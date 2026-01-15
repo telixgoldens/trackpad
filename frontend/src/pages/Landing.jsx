@@ -21,7 +21,7 @@ const Landing = ({ onStart }) => (
           className="display-1 fw-black text-white mb-4 italic tracking-tighter"
           style={{ lineHeight: 0.85 }}
         >
-          TRADE THE <br />{" "}
+          FOLLOW THE <br />{" "}
           <span style={{ color: "var(--primary-blue)" }}>PULSE.</span>
         </h1>
         <p
@@ -29,7 +29,7 @@ const Landing = ({ onStart }) => (
           style={{ maxWidth: "600px", margin: "0 auto" }}
         >
           Real-time volatility analysis and neural routing. Enter the next
-          generation of option derivatives.
+          generation of portfolio tracking.
         </p>
         <div className="d-flex justify-content-center gap-3">
           <button onClick={onStart} className="btn btn-gradient px-5 py-3">
