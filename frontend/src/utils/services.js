@@ -139,7 +139,7 @@ export const Web3Service = {
 
   getBungeeTokens: async () => {
     try {
-      const res = await fetch("http://localhost:3001/api/bungee/tokens");
+      const res = await fetch("https://trackpad.onrender.com/api/bungee/tokens");
       if (res.ok) {
         const data = await res.json();
         let tokens = [];
@@ -383,7 +383,7 @@ export const Web3Service = {
       });
 
       const quoteRes = await fetch(
-        `http://localhost:3001/api/bungee/quote?${quoteParams}`
+        `https://trackpad.onrender.com/api/bungee/quote?${quoteParams}`
       );
       if (!quoteRes.ok) throw new Error("Quote failed");
 
@@ -403,7 +403,7 @@ export const Web3Service = {
         buildParams.append("requestHash", route.requestHash);
 
       const buildRes = await fetch(
-        `http://localhost:3001/api/bungee/build-tx?${buildParams}`
+        `https://trackpad.onrender.com/api/bungee/build-tx?${buildParams}`
       );
       if (!buildRes.ok) {
         const err = await buildRes.json();
@@ -578,7 +578,7 @@ export const fetchHistoricalData = async (id, type, range = "1M") => {
     if (lookupId) {
       try {
         const res = await fetch(
-          `http://localhost:3001/api/cmc-history?id=${lookupId}&count=${days}`
+          `https://trackpad.onrender.com/api/cmc-history?id=${lookupId}&count=${days}`
         );
         if (res.ok) return await res.json();
       } catch (e) {

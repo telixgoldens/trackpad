@@ -284,7 +284,7 @@ const Dashboard = () => {
       enableMultipleAutoRoutes: false  
     });
 
-    const quoteRes = await fetch(`http://localhost:3001/api/bungee/quote?${quoteParams}`);
+    const quoteRes = await fetch(`https://trackpad.onrender.com/api/bungee/quote?${quoteParams}`);
     if (!quoteRes.ok) {
       const errorData = await quoteRes.json().catch(() => ({}));
       console.error("Quote error:", errorData);
@@ -311,7 +311,7 @@ const Dashboard = () => {
     if (route.quoteId) buildParams.append('quoteId', route.quoteId);
     else if (route.requestHash) buildParams.append('requestHash', route.requestHash);
 
-    const buildRes = await fetch(`http://localhost:3001/api/bungee/build-tx?${buildParams}`);
+    const buildRes = await fetch(`https://trackpad.onrender.com/api/bungee/build-tx?${buildParams}`);
     if (!buildRes.ok) {
       throw new Error("Failed to get approval details");
     }
