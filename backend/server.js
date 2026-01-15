@@ -40,7 +40,6 @@ app.get("/api/cmc-history", async (req, res) => {
       return res.status(502).json({ error: "Invalid CMC payload" });
     }
 
-    // CMC may return { data: { <id>: { quotes: [...] } } } or { data: { id: 1, quotes: [...] } }
     if (payload[id] && Array.isArray(payload[id].quotes)) {
       quotes = payload[id].quotes;
     } else if (Array.isArray(payload.quotes)) {
@@ -162,5 +161,5 @@ app.get("/api/bungee/build-tx", async (req, res) => {
   }
 });
 
-
-app.listen(3001, () => console.log("Backend running on :3001"));
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
