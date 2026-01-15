@@ -268,7 +268,6 @@ const Dashboard = () => {
   setSwapError("");
 
   try {
-    // For ERC20 tokens, we need to get the spender address from a quote
     console.log("Getting quote to find spender address...");
     
     const quoteParams = new URLSearchParams({
@@ -281,8 +280,8 @@ const Dashboard = () => {
       receiverAddress: walletAddress,
       slippage: 0.5,
       refuel: false,
-      enableManual: true,  // FIX: Enable manual routes
-      enableMultipleAutoRoutes: false  // FIX: Enable auto routes
+      enableManual: true,  
+      enableMultipleAutoRoutes: false  
     });
 
     const quoteRes = await fetch(`http://localhost:3001/api/bungee/quote?${quoteParams}`);
@@ -308,7 +307,6 @@ const Dashboard = () => {
 
     console.log("Route obtained:", route.quoteId || route.requestHash);
 
-    // Build tx to get spender address
     const buildParams = new URLSearchParams({ userAddress: walletAddress });
     if (route.quoteId) buildParams.append('quoteId', route.quoteId);
     else if (route.requestHash) buildParams.append('requestHash', route.requestHash);
@@ -324,20 +322,17 @@ const Dashboard = () => {
       const approvalData = buildData.result.approvalData;
       console.log("Approval data from Bungee:", approvalData);
 
-      // Build approval transaction - try Bungee's data first
       let approvalTxData;
       let approvalTarget;
       let approvalValue = "0x0";
       let approvalGas;
 
       if (approvalData.data) {
-        // Bungee provided pre-built data
         approvalTxData = approvalData.data;
         approvalTarget = approvalData.to || approvalData.tokenAddress;
         approvalValue = approvalData.value || "0x0";
         approvalGas = approvalData.gas || approvalData.gasLimit;
       } else if (approvalData.spenderAddress && approvalData.amount) {
-        // Build it ourselves
         const spenderPadded = approvalData.spenderAddress.toLowerCase().replace('0x', '').padStart(64, '0');
         const maxUint256 = 'f'.repeat(64);
         approvalTxData = '0x095ea7b3' + spenderPadded + maxUint256;
@@ -350,17 +345,13 @@ const Dashboard = () => {
       console.log("Approval target:", approvalTarget);
       console.log("Approval data:", approvalTxData);
 
-      // Build tx params
       const txParams = {
         from: walletAddress,
         to: approvalTarget,
         data: approvalTxData,
         value: approvalValue
       };
-
-      // Add gas if Bungee provided it
       if (approvalGas) {
-        // Convert to hex if needed
         if (typeof approvalGas === 'number' || (typeof approvalGas === 'string' && !approvalGas.startsWith('0x'))) {
           txParams.gas = '0x' + parseInt(approvalGas).toString(16);
         } else {
@@ -371,7 +362,6 @@ const Dashboard = () => {
         console.log("No gas limit - MetaMask will estimate");
       }
 
-      // Send approval via our service
       const result = await Web3Service.approveTokenDirect(txParams);
       
       setSwapError("");
@@ -785,7 +775,8 @@ const Dashboard = () => {
                   setSelectedFromToken(selectedToToken);
                   setSelectedToToken(tempToken);
                 }}
-                className="bg-yellow-500 p-4 rounded-full hover:scale-110 cursor-pointer"
+                className="bg-yellow-500 p-4 rounded btn-swap cursor-pointer"
+                style={{ width: "32px", height: "32px" }}
               >
                 <svg>
                   <path d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
@@ -834,11 +825,8 @@ const Dashboard = () => {
                 <p className="text-red-400 text-sm">{swapError}</p>
               </div>
             )}
-
-            {/* Check if token is native (MNT) */}
             {selectedFromToken.toLowerCase() ===
             "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" ? (
-              // Native token - only show swap button
               <button
                 onClick={handleSwap}
                 disabled={isSwapping || !walletConnected}
@@ -851,7 +839,6 @@ const Dashboard = () => {
                 {isSwapping ? "SWAPPING..." : "EXECUTE SWAP"}
               </button>
             ) : (
-              // ERC20 token - show both approve and swap buttons
               <div className="space-y-3">
                 <button
                   onClick={handleApprove}
@@ -879,7 +866,7 @@ const Dashboard = () => {
               </div>
             )}
             <p className="text-center text-[10px] font-black text-gray-600 uppercase tracking-widest mt-4">
-              Routed via Bungee • 0.1% Trackpad Fee
+              Routed via Bungee 
             </p>
           </div>
         )}

@@ -15,3 +15,8 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #6b7280; 
 }
+
+.btn-swap svg {
+  width: 16px;
+  height: 16px;
+}

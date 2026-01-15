@@ -13,7 +13,6 @@ export const Web3Service = {
       method: "eth_chainId",
     });
 
-    // Mantle Check (0x1388 / 5000)
     if (currentChainId !== "0x1388") {
       try {
         await window.ethereum.request({
@@ -199,7 +198,6 @@ export const Web3Service = {
     }
   },
 
-  // 1. Check if token needs approval
   checkTokenApproval: async ({
     tokenAddress,
     spenderAddress,
@@ -209,7 +207,6 @@ export const Web3Service = {
     if (!window.ethereum) throw new Error("Wallet not connected");
 
     try {
-      // Native token (MNT) never needs approval
       if (
         tokenAddress.toLowerCase() ===
         "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
@@ -248,12 +245,10 @@ export const Web3Service = {
       };
     } catch (error) {
       console.error("Error checking approval:", error);
-      // If we can't check, assume approval needed for safety
       return { needsApproval: true, currentAllowance: "0" };
     }
   },
 
-  // 2. Approve token (separate from swap)
   approveToken: async ({ tokenAddress, spenderAddress, userAddress }) => {
     if (!window.ethereum) throw new Error("Wallet not connected");
 
@@ -268,7 +263,6 @@ export const Web3Service = {
         .replace("0x", "")
         .padStart(64, "0");
 
-      // Use max uint256 for unlimited approval
       const maxUint256 = "f".repeat(64);
       const approvalData = "0x095ea7b3" + spenderPadded + maxUint256;
 
@@ -286,7 +280,6 @@ export const Web3Service = {
 
       console.log("Approval transaction sent:", txHash);
 
-      // Wait for confirmation
       console.log("Waiting for approval confirmation...");
       for (let i = 0; i < 45; i++) {
         const receipt = await window.ethereum.request({
@@ -315,7 +308,6 @@ export const Web3Service = {
     }
   },
 
-  // 3. Approve token direct (using pre-built params)
   approveTokenDirect: async (txParams) => {
     if (!window.ethereum) throw new Error("Wallet not connected");
 
@@ -329,7 +321,6 @@ export const Web3Service = {
 
       console.log("Approval transaction sent:", txHash);
 
-      // Wait for confirmation
       console.log("Waiting for approval confirmation...");
       for (let i = 0; i < 45; i++) {
         const receipt = await window.ethereum.request({
@@ -358,7 +349,6 @@ export const Web3Service = {
     }
   },
 
-  // 4. Execute swap only (assumes approval already done)
   executeSwapOnly: async ({
     fromToken,
     toToken,
@@ -372,7 +362,6 @@ export const Web3Service = {
     const MANTLE_CHAIN_ID_HEX = "0x1388";
 
     try {
-      // Check network
       const currentChainId = await window.ethereum.request({
         method: "eth_chainId",
       });
@@ -380,7 +369,6 @@ export const Web3Service = {
         throw new Error("Please switch to Mantle network");
       }
 
-      // Get FRESH quote immediately before building
       console.log("Getting fresh quote for swap...");
       const quoteParams = new URLSearchParams({
         originChainId: MANTLE_CHAIN_ID,
@@ -408,7 +396,6 @@ export const Web3Service = {
       const routeId = route.quoteId || route.requestHash;
       console.log("Fresh Quote ID obtained:", routeId);
 
-      // Build transaction
       console.log("Building transaction...");
       const buildParams = new URLSearchParams({ userAddress });
       if (route.quoteId) buildParams.append("quoteId", route.quoteId);
@@ -431,7 +418,6 @@ export const Web3Service = {
 
       if (!txData) throw new Error("No transaction data received");
 
-      // Send swap transaction
       console.log("Sending swap transaction...");
 
       const isNative =
@@ -474,7 +460,6 @@ export const Web3Service = {
   },
 };
 
-// ... (fetchLivePrices, fetchHistoricalData, AIService, generateMockHistoricalData remain unchanged)
 export const fetchLivePrices = async (holdings) => {
   const prices = {};
   const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY || "";
@@ -608,7 +593,9 @@ export const fetchHistoricalData = async (id, type, range = "1M") => {
       const from = to - 30 * 86400;
 
       const res = await fetch(
-        `https://finnhub.io/api/v1/stock/candle?symbol=${id}&resolution=D&from=${from}&to=${to}&token=${import.meta.env.VITE_FINNHUB_API_KEY}`
+        `https://finnhub.io/api/v1/stock/candle?symbol=${id}&resolution=D&from=${from}&to=${to}&token=${
+          import.meta.env.VITE_FINNHUB_API_KEY
+        }`
       );
 
       const json = await res.json();

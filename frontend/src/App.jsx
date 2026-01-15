@@ -49,7 +49,7 @@ const App = () => {
             href="#"
             onClick={() => setView("landing")}
           >
-            NEXUS<span style={{ color: "var(--primary-blue)" }}>.</span>
+            Trackpad<span style={{ color: "var(--primary-blue)" }}>.</span>
           </a>
           <div className="d-flex gap-4 align-items-center">
             <button
@@ -104,7 +104,7 @@ const App = () => {
           zIndex: -1,
         }}
       >
-        Nexus Execution Layer // Node Activated
+        Trackpad Execution Layer // Node Activated
       </div>
     </div>
   );
