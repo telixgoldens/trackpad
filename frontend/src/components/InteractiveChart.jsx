@@ -31,7 +31,7 @@ const InteractiveChart = ({ symbol, type }) => {
           console.warn("No CMC id for symbol", symbol);
           return;
         }
-        const url = `/api/cmc-history?id=${cmcId}&count=${{
+        const url = `https://trackpad.onrender.com/api/cmc-history?id=${cmcId}&count=${{
           '1D': 1,
           '7D': 7,
           '1M': 30,
