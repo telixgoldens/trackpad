@@ -16,19 +16,7 @@ app.use(cors({
   credentials: true
 }));
 
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Trackpad API is running',
-    endpoints: [
-      '/api/cmc-history',
-      '/api/bungee/supported-chains',
-      '/api/bungee/tokens',
-      '/api/bungee/quote',
-      '/api/bungee/build-tx'
-    ]
-  });
-});
+
 
 app.get("/api/cmc-history", async (req, res) => {
   const { id, count = 30 } = req.query;
