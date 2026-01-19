@@ -7,7 +7,28 @@ import fs from "fs";
 dotenv.config();
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://trackpad-seven.vercel.app/', 
+  ],
+  credentials: true
+}));
+
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Trackpad API is running',
+    endpoints: [
+      '/api/cmc-history',
+      '/api/bungee/supported-chains',
+      '/api/bungee/tokens',
+      '/api/bungee/quote',
+      '/api/bungee/build-tx'
+    ]
+  });
+});
 
 app.get("/api/cmc-history", async (req, res) => {
   const { id, count = 30 } = req.query;
@@ -162,4 +183,10 @@ app.get("/api/bungee/build-tx", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment check:`);
+  console.log(`   - BUNGEE_API_KEY: ${process.env.BUNGEE_API_KEY ? 'Set' : 'Missing'}`);
+  console.log(`   - BUNGEE_AFFILIATE_ID: ${process.env.BUNGEE_AFFILIATE_ID ? 'Set' : 'Missing'}`);
+  console.log(`   - COINMARKETCAP_API_KEY: ${process.env.COINMARKETCAP_API_KEY ? 'Set' : 'Missing'}`);
+});
